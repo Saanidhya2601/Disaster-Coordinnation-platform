@@ -1,0 +1,233 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ---------------- ENUMS ----------------
+
+enum Role {
+  requester
+  volunteer
+  coordinator
+  admin
+}
+
+enum Category {
+  food
+  water
+  shelter
+  medical
+  clothing
+  rescue
+  other
+}
+
+enum Urgency {
+  critical
+  high
+  medium
+  low
+}
+
+enum RequestStatus {
+  open
+  matched
+  fulfilled
+  cancelled
+}
+
+enum ResourceStatus {
+  available
+  reserved
+  depleted
+}
+
+enum MatchStatus {
+  proposed
+  accepted
+  in_transit
+  completed
+  cancelled
+}
+
+enum CheckinStatus {
+  safe
+  missing
+  unreachable
+}
+
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
+enum ReportTargetType {
+  request
+  resource
+  checkin
+  user
+}
+
+enum ReportStatus {
+  pending
+  reviewed
+  actioned
+  dismissed
+}
+
+// ---------------- MODELS ----------------
+
+model User {
+  id           String                                 @id @default(uuid())
+  name         String
+  phone        String                                 @unique
+  email        String?
+  role         Role                                   @default(requester)
+  location     Unsupported("geography(Point, 4326)")?
+  verified     Boolean                                @default(false)
+  trustScore   Int                                    @default(0)
+  otpCode      String?
+  otpExpiresAt DateTime?
+  lastActiveAt DateTime?
+  createdAt    DateTime                               @default(now())
+  updatedAt    DateTime                               @updatedAt
+
+  requestsCreated  Request[]  @relation("requestCreatedBy")
+  resourcesOffered Resource[] @relation("resourceOfferedBy")
+  checkinsReported Checkin[]  @relation("checkinReportedBy")
+  checkinsVerified Checkin[]  @relation("checkinVerifiedBy")
+  alertsCreated    Alert[]    @relation("alertCreatedBy")
+  reportsFiled     Report[]   @relation("reportFiledBy")
+
+  @@index([role])
+  @@map("users")
+}
+
+model Request {
+  id             String                                @id @default(uuid())
+  createdBy      User?                                 @relation("requestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById    String?
+  isAnonymous    Boolean                               @default(false)
+  contactPhone   String?
+  category       Category
+  description    String
+  urgency        Urgency
+  peopleAffected Int?
+  quantityNeeded String?
+  location       Unsupported("geography(Point, 4326)")
+  status         RequestStatus                         @default(open)
+  photos         String[]                              @default([])
+  createdAt      DateTime                              @default(now())
+  updatedAt      DateTime                              @updatedAt
+  resolvedAt     DateTime?
+
+  matches Match[]
+
+  @@index([status, category])
+  @@index([urgency])
+  @@index([createdAt])
+  @@map("requests")
+}
+
+model Resource {
+  id                String                                @id @default(uuid())
+  offeredBy         User                                  @relation("resourceOfferedBy", fields: [offeredById], references: [id], onDelete: Cascade)
+  offeredById       String
+  category          Category
+  description       String
+  quantityAvailable String?
+  location          Unsupported("geography(Point, 4326)")
+  availabilityStart DateTime?
+  availabilityEnd   DateTime?
+  status            ResourceStatus                        @default(available)
+  createdAt         DateTime                              @default(now())
+  updatedAt         DateTime                              @updatedAt
+
+  matches Match[]
+
+  @@index([status, category])
+  @@index([createdAt])
+  @@map("resources")
+}
+
+model Match {
+  id                   String      @id @default(uuid())
+  request              Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId            String
+  resource             Resource    @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  resourceId           String
+  distanceKm           Float?
+  status               MatchStatus @default(proposed)
+  confirmedByRequester Boolean     @default(false)
+  confirmedByVolunteer Boolean     @default(false)
+  cancelReason         String?
+  notes                String?
+  createdAt            DateTime    @default(now())
+  completedAt          DateTime?
+
+  @@unique([requestId, resourceId, status], name: "uniqueActiveMatch")
+  @@index([status])
+  @@map("matches")
+}
+
+model Checkin {
+  id                String                                 @id @default(uuid())
+  name              String
+  relationToPerson  String?
+  reportedBy        User?                                  @relation("checkinReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+  reportedById      String?
+  status            CheckinStatus
+  lastKnownLocation Unsupported("geography(Point, 4326)")?
+  lastSeenAt        DateTime?
+  contactPhone      String?
+  verifiedBy        User?                                  @relation("checkinVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedById      String?
+  verifiedAt        DateTime?
+  createdAt         DateTime                               @default(now())
+  updatedAt         DateTime                               @updatedAt
+
+  @@index([status])
+  @@map("checkins")
+}
+
+model Alert {
+  id           String                                   @id @default(uuid())
+  title        String
+  body         String
+  severity     AlertSeverity
+  centerPoint  Unsupported("geography(Point, 4326)")?
+  radiusKm     Float?
+  affectedArea Unsupported("geography(Polygon, 4326)")?
+  createdBy    User                                     @relation("alertCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById  String
+  createdAt    DateTime                                 @default(now())
+  expiresAt    DateTime?
+
+  @@index([severity])
+  @@index([expiresAt])
+  @@map("alerts")
+}
+
+model Report {
+  id              String           @id @default(uuid())
+  targetType      ReportTargetType
+  targetId        String
+  reportedBy      User             @relation("reportFiledBy", fields: [reportedById], references: [id], onDelete: Cascade)
+  reportedById    String
+  reason          String
+  status          ReportStatus     @default(pending)
+  resolutionNotes String?
+  resolvedAt      DateTime?
+  createdAt       DateTime         @default(now())
+
+  @@index([targetType, targetId])
+  @@index([status])
+  @@map("reports")
+}
