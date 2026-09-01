@@ -6,7 +6,7 @@ const findAndCreateMatchesForRequest = async (requestId) => {
     const matchingResources = await prisma.$queryRaw`
       SELECT rs.id AS "resourceId"
       FROM "resources" rs
-      JOIN "requests" rq ON rq.id = ${requestId}::uuid
+      JOIN "requests" rq ON rq.id = ${requestId}
       WHERE rs.status = 'available'
         AND rs.category = rq.category
         AND ST_DWithin(rs.location, rq.location, 10000)
@@ -39,7 +39,7 @@ const findAndCreateMatchesForResource = async (resourceId) => {
     const matchingRequests = await prisma.$queryRaw`
       SELECT rq.id AS "requestId"
       FROM "requests" rq
-      JOIN "resources" rs ON rs.id = ${resourceId}::uuid
+      JOIN "resources" rs ON rs.id = ${resourceId}
       WHERE rq.status = 'open'
         AND rq.category = rs.category
         AND ST_DWithin(rq.location, rs.location, 10000)
