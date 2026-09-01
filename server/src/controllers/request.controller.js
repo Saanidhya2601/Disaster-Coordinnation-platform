@@ -2,6 +2,9 @@
 const { Prisma } = require("@prisma/client");
 const prisma = require("../lib/prisma");
 const { findNearbyRequests } = require("../services/geo.service");
+const {
+  findAndCreateMatchesForRequest,
+} = require("../services/matching.service");
 
 const createRequest = async (req, res) => {
   const {
@@ -13,13 +16,14 @@ const createRequest = async (req, res) => {
     peopleAffected,
     quantityNeeded,
   } = req.body;
-  const userId = req.user.id; // From auth middleware
+  const userId = req.user.id;
 
   if (!lat || !lng || !category || !description || !urgency) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
   try {
+    // 1. Create the Request using PostGIS
     const result = await prisma.$queryRaw`
       INSERT INTO "requests" (
         "id", "createdById", "category", "description", "urgency", 
@@ -32,9 +36,27 @@ const createRequest = async (req, res) => {
       RETURNING id, category, description, urgency, status;
     `;
 
+    const newRequest = result[0];
+
+    // 2. Run the Automated Matching Engine
+    const matches = await findAndCreateMatchesForRequest(newRequest.id);
+
+    // 3. Broadcast to all clients via Socket.io
+    const io = req.app.get("io");
+    io.emit("request:new", {
+      ...newRequest,
+      lat,
+      lng,
+    });
+
+    if (matches.length > 0) {
+      io.emit("match:new", matches);
+    }
+
     return res.status(201).json({
       message: "Request created successfully",
-      request: result[0],
+      request: newRequest,
+      matchesFound: matches.length,
     });
   } catch (error) {
     console.error("[REQUEST ERROR]", error);
@@ -58,7 +80,6 @@ const getNearbyRequests = async (req, res) => {
       parseFloat(radiusKm),
       category,
     );
-
     return res.status(200).json({ requests });
   } catch (error) {
     console.error("[GEO ERROR]", error);

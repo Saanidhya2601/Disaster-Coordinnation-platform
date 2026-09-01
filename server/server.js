@@ -11,6 +11,7 @@ const prisma = require("./src/lib/prisma");
 // Route Imports
 const authRoutes = require("./src/routes/auth.routes");
 const requestRoutes = require("./src/routes/request.routes");
+const resourceRoutes = require("./src/routes/resource.routes");
 
 const app = express();
 const server = http.createServer(app);
@@ -23,6 +24,7 @@ const io = new Server(server, {
   },
 });
 
+app.set("io", io);
 // Global Middlewares
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
 app.use(express.json());
@@ -31,6 +33,7 @@ app.use("/api", apiLimiter);
 // API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/requests", requestRoutes);
+app.use("/api/resources", resourceRoutes);
 
 // Health check endpoint
 app.get("/health", async (req, res) => {
