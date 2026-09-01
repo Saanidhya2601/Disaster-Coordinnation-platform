@@ -4,6 +4,9 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 require("dotenv").config();
+const matchRoutes = require("./src/routes/match.routes");
+const checkinRoutes = require("./src/routes/checkin.routes");
+const alertRoutes = require("./src/routes/alert.routes");
 
 const { apiLimiter } = require("./src/middleware/rateLimiter");
 const prisma = require("./src/lib/prisma");
@@ -34,6 +37,9 @@ app.use("/api", apiLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/requests", requestRoutes);
 app.use("/api/resources", resourceRoutes);
+app.use("/api/matches", matchRoutes);
+app.use("/api/checkins", checkinRoutes);
+app.use("/api/alerts", alertRoutes);
 
 // Health check endpoint
 app.get("/health", async (req, res) => {
