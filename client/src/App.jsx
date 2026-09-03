@@ -229,34 +229,30 @@ export default function App() {
   };
 
   const handleResolve = async (id, type) => {
-    // 1. Snapshot the current UI state before making changes
     const previousMapItems = [...mapItems];
     const previousMatches = [...liveMatches];
 
-    // 2. Optimistically remove the marker from the local UI
     setMapItems((prev) => prev.filter((item) => item.id !== id));
     setLiveMatches((prev) =>
       prev.filter((m) => m.requestId !== id && m.resourceId !== id),
     );
 
+    // Map correctly to schema enum values: RequestStatus uses 'fulfilled', ResourceStatus uses 'depleted'
+    const targetStatus = type === "request" ? "fulfilled" : "depleted";
+
     try {
       await axios.patch(
         `${API_URL}/${type}s/${id}/status`,
-        // IMPORTANT: If you still get an error, check your schema.prisma to see
-        // if your RequestStatus enum uses "resolved", "closed", or "completed".
-        { status: "completed" },
+        { status: targetStatus },
         {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         },
       );
     } catch (error) {
-      // 3. Revert the UI if the backend database update fails
       console.error(error);
       setMapItems(previousMapItems);
       setLiveMatches(previousMatches);
-      alert(
-        "Database update failed! The marker has been restored. Check your backend terminal for the exact Prisma enum error.",
-      );
+      alert("Database update failed! The marker has been restored.");
     }
   };
 
