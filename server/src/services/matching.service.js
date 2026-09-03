@@ -22,7 +22,7 @@ const findAndCreateMatchesForRequest = async (requestId) => {
 
       if (!existing) {
         const newMatch = await prisma.match.create({
-          data: { requestId, resourceId: res.resourceId, status: "pending" },
+          data: { requestId, resourceId: res.resourceId, status: "proposed" },
         });
         createdMatches.push(newMatch);
       }
@@ -55,7 +55,7 @@ const findAndCreateMatchesForResource = async (resourceId) => {
 
       if (!existing) {
         const newMatch = await prisma.match.create({
-          data: { requestId: req.requestId, resourceId, status: "pending" },
+          data: { requestId: req.requestId, resourceId, status: "proposed" },
         });
         createdMatches.push(newMatch);
       }

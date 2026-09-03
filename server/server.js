@@ -4,22 +4,23 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 require("dotenv").config();
-const matchRoutes = require("./src/routes/match.routes");
-const checkinRoutes = require("./src/routes/checkin.routes");
-const alertRoutes = require("./src/routes/alert.routes");
 
 const { apiLimiter } = require("./src/middleware/rateLimiter");
 const prisma = require("./src/lib/prisma");
 
 // Route Imports
+const matchRoutes = require("./src/routes/match.routes");
+const checkinRoutes = require("./src/routes/checkin.routes");
+const alertRoutes = require("./src/routes/alert.routes");
 const authRoutes = require("./src/routes/auth.routes");
 const requestRoutes = require("./src/routes/request.routes");
 const resourceRoutes = require("./src/routes/resource.routes");
 
+// Initialize Express App & Server FIRST
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io instance with CORS
+// Initialize Socket.io SECOND
 const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_URL || "http://localhost:5173",
@@ -27,7 +28,9 @@ const io = new Server(server, {
   },
 });
 
+// Attach Socket.io to Express THIRD
 app.set("io", io);
+
 // Global Middlewares
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
 app.use(express.json());

@@ -4,11 +4,11 @@ const router = express.Router();
 const {
   createRequest,
   getNearbyRequests,
+  updateRequestStatus,
 } = require("../controllers/request.controller");
-// const { requireAuth } = require('../middleware/auth'); // Temporarily disabled
 const prisma = require("../lib/prisma");
 
-// TEMPORARY BYPASS: Grabs the first seeded user from the database
+// TEMPORARY BYPASS
 const mockAuth = async (req, res, next) => {
   try {
     const user = await prisma.user.findFirst();
@@ -16,6 +16,7 @@ const mockAuth = async (req, res, next) => {
       return res
         .status(500)
         .json({ error: "No users found. Run seed script." });
+
     req.user = { id: user.id };
     next();
   } catch (error) {
@@ -23,8 +24,8 @@ const mockAuth = async (req, res, next) => {
   }
 };
 
-// Use mockAuth instead of requireAuth
 router.post("/", mockAuth, createRequest);
 router.get("/", getNearbyRequests);
+router.patch("/:id/status", mockAuth, updateRequestStatus);
 
 module.exports = router;

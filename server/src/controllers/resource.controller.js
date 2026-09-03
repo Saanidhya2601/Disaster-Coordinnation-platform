@@ -7,7 +7,7 @@ const {
 } = require("../services/matching.service");
 
 const createResource = async (req, res) => {
-  const { category, description, lat, lng, quantityAvailable } = req.body;
+  const { category, description, quantityAvailable, lat, lng } = req.body;
   const userId = req.user.id;
 
   if (!lat || !lng || !category || !description) {
@@ -17,35 +17,27 @@ const createResource = async (req, res) => {
   try {
     const result = await prisma.$queryRaw`
       INSERT INTO "resources" (
-        "id", "offeredById", "category", "description", "quantityAvailable", 
+        "id", "createdById", "category", "description", "quantityAvailable", 
         "location", "status", "updatedAt"
       ) VALUES (
         gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
-        ${quantityAvailable || null}, ST_MakePoint(${lng}, ${lat})::geography, 
-        'available'::"ResourceStatus", NOW()
+        ${quantityAvailable || 1}, 
+        ST_MakePoint(${lng}, ${lat})::geography, 'available'::"ResourceStatus", NOW()
       ) 
       RETURNING id, category, description, status;
     `;
 
     const newResource = result[0];
-
-    // 1. Run Automated Matching
     const matches = await findAndCreateMatchesForResource(newResource.id);
-
-    // 2. Broadcast via Socket.io
     const io = req.app.get("io");
-    io.emit("resource:new", {
-      ...newResource,
-      lat,
-      lng,
-    });
 
+    io.emit("resource:new", { ...newResource, lat, lng });
     if (matches.length > 0) {
       io.emit("match:new", matches);
     }
 
     return res.status(201).json({
-      message: "Resource posted",
+      message: "Resource created successfully",
       resource: newResource,
       matchesFound: matches.length,
     });
@@ -73,8 +65,25 @@ const getNearbyResources = async (req, res) => {
     );
     return res.status(200).json({ resources });
   } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch resources" });
+    console.error("[GEO ERROR]", error);
+    return res.status(500).json({ error: "Failed to fetch nearby resources" });
   }
 };
 
-module.exports = { createResource, getNearbyResources };
+const updateResourceStatus = async (req, res) => {
+  try {
+    const updated = await prisma.resource.update({
+      where: { id: req.params.id },
+      data: { status: req.body.status },
+    });
+
+    // Emit global removal event to ALL windows
+    req.app.get("io").emit("item:resolved", req.params.id);
+    res.json(updated);
+  } catch (error) {
+    console.error("[UPDATE ERROR]", error);
+    res.status(500).json({ error: "Failed to update resource" });
+  }
+};
+
+module.exports = { createResource, getNearbyResources, updateResourceStatus };

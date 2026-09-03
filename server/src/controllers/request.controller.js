@@ -23,7 +23,6 @@ const createRequest = async (req, res) => {
   }
 
   try {
-    // 1. Create the Request using PostGIS
     const result = await prisma.$queryRaw`
       INSERT INTO "requests" (
         "id", "createdById", "category", "description", "urgency", 
@@ -37,18 +36,10 @@ const createRequest = async (req, res) => {
     `;
 
     const newRequest = result[0];
-
-    // 2. Run the Automated Matching Engine
     const matches = await findAndCreateMatchesForRequest(newRequest.id);
-
-    // 3. Broadcast to all clients via Socket.io
     const io = req.app.get("io");
-    io.emit("request:new", {
-      ...newRequest,
-      lat,
-      lng,
-    });
 
+    io.emit("request:new", { ...newRequest, lat, lng });
     if (matches.length > 0) {
       io.emit("match:new", matches);
     }
@@ -87,4 +78,20 @@ const getNearbyRequests = async (req, res) => {
   }
 };
 
-module.exports = { createRequest, getNearbyRequests };
+const updateRequestStatus = async (req, res) => {
+  try {
+    const updated = await prisma.request.update({
+      where: { id: req.params.id },
+      data: { status: req.body.status },
+    });
+
+    // Emit global removal event to ALL windows
+    req.app.get("io").emit("item:resolved", req.params.id);
+    res.json(updated);
+  } catch (error) {
+    console.error("[UPDATE ERROR]", error);
+    res.status(500).json({ error: "Failed to update request" });
+  }
+};
+
+module.exports = { createRequest, getNearbyRequests, updateRequestStatus };
