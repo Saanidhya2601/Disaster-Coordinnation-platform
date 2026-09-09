@@ -17,11 +17,11 @@ const createResource = async (req, res) => {
   try {
     const result = await prisma.$queryRaw`
       INSERT INTO "resources" (
-        "id", "createdById", "category", "description", "quantityAvailable", 
+        "id", "offeredById", "category", "description", "quantityAvailable", 
         "location", "status", "updatedAt"
       ) VALUES (
         gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
-        ${quantityAvailable || 1}, 
+        ${quantityAvailable ? String(quantityAvailable) : "1"}, 
         ST_MakePoint(${lng}, ${lat})::geography, 'available'::"ResourceStatus", NOW()
       ) 
       RETURNING id, category, description, status;
@@ -77,7 +77,6 @@ const updateResourceStatus = async (req, res) => {
       data: { status: req.body.status },
     });
 
-    // Emit global removal event to ALL windows
     req.app.get("io").emit("item:resolved", req.params.id);
     res.json(updated);
   } catch (error) {

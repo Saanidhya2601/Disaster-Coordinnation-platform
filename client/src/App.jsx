@@ -69,7 +69,6 @@ const SidebarForm = ({
         Have Supplies
       </button>
     </div>
-
     <form onSubmit={handleSubmit} className="form-group">
       <label>
         <b>Category</b>
@@ -85,7 +84,6 @@ const SidebarForm = ({
           <option value="rescue">Rescue</option>
         </select>
       </label>
-
       {formType === "request" ? (
         <label>
           <b>Urgency</b>
@@ -118,7 +116,6 @@ const SidebarForm = ({
           />
         </label>
       )}
-
       <label>
         <b>Description</b>
         <textarea
@@ -131,12 +128,10 @@ const SidebarForm = ({
           className="form-input"
         />
       </label>
-
       <div className="coord-box">
         <b>Lat:</b> {formData.lat || "Pending"} | <b>Lng:</b>{" "}
         {formData.lng || "Pending"}
       </div>
-
       <button
         type="submit"
         className={`btn ${formType === "request" ? "btn-red" : "btn-green"}`}
@@ -147,11 +142,63 @@ const SidebarForm = ({
   </div>
 );
 
+// NEW: Dashboard for Match Management
+const MatchDashboard = ({
+  isDashOpen,
+  matches,
+  mapItems,
+  onUpdateMatchStatus,
+}) => (
+  <div className={`dash-panel ${isDashOpen ? "dash-open" : "dash-closed"}`}>
+    <h3>Active Matches</h3>
+    {matches.length === 0 && (
+      <p style={{ color: "#666" }}>No active pairings.</p>
+    )}
+    {matches.map((match) => {
+      const req = mapItems.find((i) => i.id === match.requestId);
+      const res = mapItems.find((i) => i.id === match.resourceId);
+      if (!req || !res) return null;
+
+      return (
+        <div key={match.id} className="match-card">
+          <p style={{ margin: "0 0 8px 0", fontSize: "14px" }}>
+            <b>Request:</b> {req.category.toUpperCase()} ({req.urgency})
+          </p>
+          <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+            <b>Resource:</b> {res.category.toUpperCase()}
+          </p>
+          <small>Status: {match.status.toUpperCase()}</small>
+
+          {match.status === "proposed" && (
+            <div className="flex-row" style={{ margin: "10px 0 0 0" }}>
+              <button
+                onClick={() => onUpdateMatchStatus(match.id, "accepted")}
+                className="btn btn-green flex-1"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => onUpdateMatchStatus(match.id, "cancelled")}
+                className="btn btn-red flex-1"
+              >
+                Reject
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
+
 export default function App() {
   const [mapItems, setMapItems] = useState([]);
   const [liveMatches, setLiveMatches] = useState([]);
   const [toast, setToast] = useState(null);
+
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [isDashOpen, setIsDashOpen] = useState(false); // New state for dashboard
+
   const [formType, setFormType] = useState("request");
   const [formData, setFormData] = useState({
     category: "medical",
@@ -185,6 +232,7 @@ export default function App() {
     socket.on("resource:new", (data) =>
       setMapItems((p) => [...p, { ...data, type: "resource" }]),
     );
+
     socket.on("match:new", (matches) => {
       setLiveMatches((p) => [...p, ...matches]);
       setToast(`⚡ Auto-Match: Paired ${matches.length} nearby locations!`);
@@ -198,11 +246,23 @@ export default function App() {
       );
     });
 
+    // NEW: Listen for match status changes (Accept/Reject)
+    socket.on("match:updated", (updatedMatch) => {
+      if (updatedMatch.status === "cancelled") {
+        setLiveMatches((prev) => prev.filter((m) => m.id !== updatedMatch.id));
+      } else {
+        setLiveMatches((prev) =>
+          prev.map((m) => (m.id === updatedMatch.id ? updatedMatch : m)),
+        );
+      }
+    });
+
     return () => {
       socket.off("request:new");
       socket.off("resource:new");
       socket.off("match:new");
       socket.off("item:resolved");
+      socket.off("match:updated");
     };
   }, []);
 
@@ -210,36 +270,33 @@ export default function App() {
     e.preventDefault();
     if (!formData.lat || !formData.lng)
       return alert("Click map to set location.");
-
     try {
       await axios.post(`${API_URL}/${formType}s`, formData, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       setFormData({
-        ...formData,
+        category: "medical",
         description: "",
+        urgency: "high",
+        quantityAvailable: 1,
         lat: "",
         lng: "",
-        quantityAvailable: 1,
       });
       setIsPanelOpen(false);
     } catch (error) {
-      alert("Post failed. Check backend logs.");
+      alert("Post failed.");
     }
   };
 
   const handleResolve = async (id, type) => {
     const previousMapItems = [...mapItems];
     const previousMatches = [...liveMatches];
-
     setMapItems((prev) => prev.filter((item) => item.id !== id));
     setLiveMatches((prev) =>
       prev.filter((m) => m.requestId !== id && m.resourceId !== id),
     );
 
-    // Map correctly to schema enum values: RequestStatus uses 'fulfilled', ResourceStatus uses 'depleted'
     const targetStatus = type === "request" ? "fulfilled" : "depleted";
-
     try {
       await axios.patch(
         `${API_URL}/${type}s/${id}/status`,
@@ -249,10 +306,24 @@ export default function App() {
         },
       );
     } catch (error) {
-      console.error(error);
       setMapItems(previousMapItems);
       setLiveMatches(previousMatches);
-      alert("Database update failed! The marker has been restored.");
+      alert("Database update failed!");
+    }
+  };
+
+  // NEW: Dispatch Match Updates
+  const handleUpdateMatchStatus = async (matchId, newStatus) => {
+    try {
+      await axios.patch(
+        `${API_URL}/matches/${matchId}/status`,
+        { status: newStatus },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        },
+      );
+    } catch (error) {
+      alert("Failed to update match status.");
     }
   };
 
@@ -268,6 +339,19 @@ export default function App() {
         {isPanelOpen ? "◀ Close" : "▶ Dispatch"}
       </button>
 
+      {/* NEW: Dashboard Toggle Button */}
+      <button
+        onClick={() => setIsDashOpen(!isDashOpen)}
+        className="toggle-btn"
+        style={{
+          right: isDashOpen ? "320px" : "0",
+          left: "auto",
+          borderRadius: "8px 0 0 8px",
+        }}
+      >
+        {isDashOpen ? "Close ▶" : "◀ Matches"}
+      </button>
+
       <SidebarForm
         {...{
           isPanelOpen,
@@ -277,6 +361,12 @@ export default function App() {
           setFormData,
           handleSubmit,
         }}
+      />
+      <MatchDashboard
+        isDashOpen={isDashOpen}
+        matches={liveMatches}
+        mapItems={mapItems}
+        onUpdateMatchStatus={handleUpdateMatchStatus}
       />
 
       <div className="map-fullscreen">
@@ -324,21 +414,24 @@ export default function App() {
             </Marker>
           ))}
 
-          {liveMatches.map((match, idx) => {
+          {liveMatches.map((match) => {
             const req = mapItems.find((i) => i.id === match.requestId);
             const res = mapItems.find((i) => i.id === match.resourceId);
-            return req && res ? (
+            if (!req || !res) return null;
+
+            // Accepted matches show as solid green lines, proposed as dashed blue
+            return (
               <Polyline
-                key={idx}
+                key={match.id}
                 positions={[
                   [req.lat, req.lng],
                   [res.lat, res.lng],
                 ]}
-                color="#0dcaf0"
+                color={match.status === "accepted" ? "#28a745" : "#0dcaf0"}
                 weight={4}
-                dashArray="10, 10"
+                dashArray={match.status === "accepted" ? "" : "10, 10"}
               />
-            ) : null;
+            );
           })}
 
           {formData.lat && formData.lng && (

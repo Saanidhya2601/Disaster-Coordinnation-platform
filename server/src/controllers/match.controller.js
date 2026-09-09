@@ -5,7 +5,6 @@ const getUserMatches = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Find all matches where the user either created the request or offered the resource
     const matches = await prisma.match.findMany({
       where: {
         OR: [
@@ -29,15 +28,15 @@ const getUserMatches = async (req, res) => {
 
 const updateMatchStatus = async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body; // 'accepted', 'rejected', or 'completed'
+  const { status } = req.body;
   const userId = req.user.id;
 
-  if (!["accepted", "rejected", "completed"].includes(status)) {
+  // UPDATED: Replaced "rejected" with "cancelled" to match Prisma schema
+  if (!["accepted", "cancelled", "in_transit", "completed"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
 
   try {
-    // Verify the match exists and the user is involved
     const existingMatch = await prisma.match.findUnique({
       where: { id },
       include: { request: true, resource: true },
@@ -62,7 +61,6 @@ const updateMatchStatus = async (req, res) => {
       include: { request: true, resource: true },
     });
 
-    // Notify connected clients about the status change
     const io = req.app.get("io");
     io.emit("match:updated", updatedMatch);
 

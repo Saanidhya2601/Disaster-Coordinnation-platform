@@ -118,3 +118,28 @@
 .flex-1 {
   flex: 1;
 }
+/* Dashboard Additions */
+.dash-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 320px;
+  background: #fff;
+  box-shadow: -2px 0 15px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.dash-closed {
+  transform: translateX(100%);
+}
+.match-card {
+  border: 1px solid #dee2e6;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #f8f9fa;
+}
