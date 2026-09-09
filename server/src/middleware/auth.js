@@ -1,4 +1,3 @@
-// server/src/middleware/auth.js
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
 
@@ -12,7 +11,11 @@ const requireAuth = async (req, res, next) => {
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Added fallback here as well to match the controller
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "fallback_dev_secret_key",
+    );
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: { id: true, phone: true, name: true, role: true, verified: true },

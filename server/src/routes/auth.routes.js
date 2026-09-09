@@ -1,4 +1,3 @@
-// server/src/routes/auth.routes.js
 const express = require("express");
 const router = express.Router();
 const { sendOtp, verifyOtp, getMe } = require("../controllers/auth.controller");

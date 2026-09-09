@@ -1,9 +1,7 @@
-// server/src/controllers/auth.controller.js
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
 
 // Temporary in-memory OTP store for development
-// In production, swap with Redis or SMS provider verification service
 const otpStore = new Map();
 
 const sendOtp = async (req, res) => {
@@ -13,15 +11,14 @@ const sendOtp = async (req, res) => {
     return res.status(400).json({ error: "Valid phone number is required" });
   }
 
-  // Generate 6-digit OTP (fixed code 123456 in dev mode if preferred, or random)
   const otp =
     process.env.NODE_ENV === "development"
       ? "123456"
       : Math.floor(100000 + Math.random() * 900000).toString();
+
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
 
   otpStore.set(phone, { otp, expiresAt });
-
   console.log(`[AUTH] OTP for ${phone}: ${otp}`);
 
   return res.status(200).json({
@@ -50,7 +47,6 @@ const verifyOtp = async (req, res) => {
 
   otpStore.delete(phone);
 
-  // Upsert user in Postgres
   let user = await prisma.user.findUnique({ where: { phone } });
 
   if (!user) {
@@ -68,9 +64,10 @@ const verifyOtp = async (req, res) => {
     });
   }
 
+  // Added fallback for JWT_SECRET to prevent dev crashes
   const token = jwt.sign(
     { userId: user.id, role: user.role },
-    process.env.JWT_SECRET,
+    process.env.JWT_SECRET || "fallback_dev_secret_key",
     { expiresIn: "7d" },
   );
 
