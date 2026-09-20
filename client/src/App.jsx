@@ -31,6 +31,100 @@ const ICONS = {
   resource: getIcon("green"),
 };
 
+// --- AUTH COMPONENT ---
+const AuthScreen = ({ onLogin }) => {
+  const [step, setStep] = useState(1);
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [otp, setOtp] = useState("");
+
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API_URL}/auth/otp/send`, { phone });
+      setStep(2);
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to send OTP");
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_URL}/auth/otp/verify`, {
+        phone,
+        otp,
+        name,
+      });
+      localStorage.setItem("token", res.data.token);
+      onLogin(res.data.token);
+    } catch (err) {
+      alert(err.response?.data?.error || "Invalid OTP");
+    }
+  };
+
+  return (
+    <div className="auth-overlay">
+      <div className="auth-card">
+        <h2 className="auth-title">TimeChamp Dispatch</h2>
+        {step === 1 ? (
+          <form onSubmit={handleSendOtp} className="form-group">
+            <label>
+              <b>Phone Number</b>
+              <input
+                type="text"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91..."
+                className="form-input"
+              />
+            </label>
+            <label>
+              <b>Name (New Users)</b>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Jane Doe"
+                className="form-input"
+              />
+            </label>
+            <button type="submit" className="btn btn-green">
+              Send OTP
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="form-group">
+            <label>
+              <b>Enter OTP</b>
+              <input
+                type="text"
+                required
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="123456"
+                className="form-input"
+              />
+            </label>
+            <button type="submit" className="btn btn-green">
+              Verify & Login
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="btn btn-inactive"
+            >
+              Back
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- MAP COMPONENTS ---
 const MapClickHandler = ({ setFormData }) => {
   useMapEvents({
     click(e) {
@@ -142,7 +236,6 @@ const SidebarForm = ({
   </div>
 );
 
-// NEW: Dashboard for Match Management
 const MatchDashboard = ({
   isDashOpen,
   matches,
@@ -191,13 +284,15 @@ const MatchDashboard = ({
   </div>
 );
 
+// --- MAIN APP ---
 export default function App() {
+  const [token, setToken] = useState(localStorage.getItem("token"));
   const [mapItems, setMapItems] = useState([]);
   const [liveMatches, setLiveMatches] = useState([]);
   const [toast, setToast] = useState(null);
 
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
-  const [isDashOpen, setIsDashOpen] = useState(false); // New state for dashboard
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isDashOpen, setIsDashOpen] = useState(false);
 
   const [formType, setFormType] = useState("request");
   const [formData, setFormData] = useState({
@@ -209,7 +304,11 @@ export default function App() {
     lng: "",
   });
 
+  const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
+
   useEffect(() => {
+    if (!token) return; // Don't fetch if not logged in
+
     Promise.all([
       axios.get(
         `${API_URL}/requests?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=15`,
@@ -246,7 +345,6 @@ export default function App() {
       );
     });
 
-    // NEW: Listen for match status changes (Accept/Reject)
     socket.on("match:updated", (updatedMatch) => {
       if (updatedMatch.status === "cancelled") {
         setLiveMatches((prev) => prev.filter((m) => m.id !== updatedMatch.id));
@@ -264,16 +362,21 @@ export default function App() {
       socket.off("item:resolved");
       socket.off("match:updated");
     };
-  }, []);
+  }, [token]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setMapItems([]);
+    setLiveMatches([]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.lat || !formData.lng)
       return alert("Click map to set location.");
     try {
-      await axios.post(`${API_URL}/${formType}s`, formData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
+      await axios.post(`${API_URL}/${formType}s`, formData, getHeaders());
       setFormData({
         category: "medical",
         description: "",
@@ -301,9 +404,7 @@ export default function App() {
       await axios.patch(
         `${API_URL}/${type}s/${id}/status`,
         { status: targetStatus },
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        },
+        getHeaders(),
       );
     } catch (error) {
       setMapItems(previousMapItems);
@@ -312,34 +413,38 @@ export default function App() {
     }
   };
 
-  // NEW: Dispatch Match Updates
   const handleUpdateMatchStatus = async (matchId, newStatus) => {
     try {
       await axios.patch(
         `${API_URL}/matches/${matchId}/status`,
         { status: newStatus },
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        },
+        getHeaders(),
       );
     } catch (error) {
       alert("Failed to update match status.");
     }
   };
 
+  if (!token) {
+    return <AuthScreen onLogin={setToken} />;
+  }
+
   return (
     <div className="app-wrapper">
       {toast && <div className="toast">{toast}</div>}
 
+      <button onClick={handleLogout} className="btn-logout">
+        Logout
+      </button>
+
       <button
         onClick={() => setIsPanelOpen(!isPanelOpen)}
         className="toggle-btn"
-        style={{ left: isPanelOpen ? "320px" : "0" }}
+        style={{ left: isPanelOpen ? "320px" : "100px" }}
       >
         {isPanelOpen ? "◀ Close" : "▶ Dispatch"}
       </button>
 
-      {/* NEW: Dashboard Toggle Button */}
       <button
         onClick={() => setIsDashOpen(!isDashOpen)}
         className="toggle-btn"
@@ -419,7 +524,6 @@ export default function App() {
             const res = mapItems.find((i) => i.id === match.resourceId);
             if (!req || !res) return null;
 
-            // Accepted matches show as solid green lines, proposed as dashed blue
             return (
               <Polyline
                 key={match.id}
