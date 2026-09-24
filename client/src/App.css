@@ -183,3 +183,33 @@
   font-weight: bold;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
 }
+.alert-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  background: #dc3545;
+  color: white;
+  padding: 10px 20px;
+  text-align: center;
+  font-weight: bold;
+  z-index: 2005;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  align-items: center;
+}
+.map-fullscreen-pushed {
+  top: 40px;
+  height: calc(100vh - 40px);
+}
+.btn-close-alert {
+  background: transparent;
+  border: 1px solid white;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 12px;
+}

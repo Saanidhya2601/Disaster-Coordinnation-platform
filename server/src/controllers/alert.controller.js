@@ -2,44 +2,37 @@
 const prisma = require("../lib/prisma");
 
 const createAlert = async (req, res) => {
-  const { title, description, severity, lat, lng } = req.body;
+  const { title, body, severity, expiresAt } = req.body;
   const userId = req.user.id;
 
-  if (!title || !description || !severity) {
-    return res
-      .status(400)
-      .json({ error: "Title, description, and severity are required" });
-  }
-
   try {
-    let alertData = {
-      title,
-      description,
-      severity,
-      createdById: userId,
-    };
+    const newAlert = await prisma.alert.create({
+      data: {
+        title,
+        body,
+        severity: severity || "info",
+        createdById: userId,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      },
+    });
 
-    // Use Prisma's standard create unless you need radius-based alert queries later
-    const newAlert = await prisma.alert.create({ data: alertData });
+    // Instantly push the alert to all connected screens
+    req.app.get("io").emit("alert:new", newAlert);
 
-    // Broadcast emergency alert to all connected clients immediately
-    const io = req.app.get("io");
-    io.emit("alert:new", newAlert);
-
-    return res
-      .status(201)
-      .json({ message: "Alert broadcasted", alert: newAlert });
+    return res.status(201).json(newAlert);
   } catch (error) {
     console.error("[ALERT ERROR]", error);
-    return res.status(500).json({ error: "Failed to broadcast alert" });
+    return res.status(500).json({ error: "Failed to create alert" });
   }
 };
 
 const getActiveAlerts = async (req, res) => {
   try {
     const alerts = await prisma.alert.findMany({
+      where: {
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
       orderBy: { createdAt: "desc" },
-      take: 20,
     });
     return res.status(200).json({ alerts });
   } catch (error) {

@@ -7,13 +7,13 @@ const {
 } = require("../controllers/alert.controller");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
-// Only allow Admins or Dispatchers to create system-wide alerts
+router.get("/", requireAuth, getActiveAlerts);
+
 router.post(
   "/",
   requireAuth,
-  requireRole(["ADMIN", "DISPATCHER"]),
+  requireRole(["admin", "coordinator"]),
   createAlert,
 );
-router.get("/", getActiveAlerts);
 
 module.exports = router;

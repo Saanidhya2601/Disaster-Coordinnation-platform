@@ -290,6 +290,7 @@ export default function App() {
   const [mapItems, setMapItems] = useState([]);
   const [liveMatches, setLiveMatches] = useState([]);
   const [toast, setToast] = useState(null);
+  const [alerts, setAlerts] = useState([]);
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isDashOpen, setIsDashOpen] = useState(false);
@@ -312,16 +313,20 @@ export default function App() {
     Promise.all([
       axios.get(
         `${API_URL}/requests?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=15`,
+        getHeaders(),
       ),
       axios.get(
         `${API_URL}/resources?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=15`,
+        getHeaders(),
       ),
+      axios.get(`${API_URL}/alerts`, getHeaders()), // Fetch active alerts
     ])
-      .then(([reqRes, resRes]) => {
+      .then(([reqRes, resRes, alertRes]) => {
         setMapItems([
           ...reqRes.data.requests.map((r) => ({ ...r, type: "request" })),
           ...resRes.data.resources.map((r) => ({ ...r, type: "resource" })),
         ]);
+        setAlerts(alertRes.data.alerts); // Store the fetched alerts
       })
       .catch((err) => console.error("Load failed:", err));
 
@@ -355,12 +360,18 @@ export default function App() {
       }
     });
 
+    // NEW: Listen for remote alerts
+    socket.on("alert:new", (newAlert) => {
+      setAlerts((prev) => [newAlert, ...prev]);
+    });
+
     return () => {
       socket.off("request:new");
       socket.off("resource:new");
       socket.off("match:new");
       socket.off("item:resolved");
       socket.off("match:updated");
+      socket.off("alert:new"); // Clean up alert listener
     };
   }, [token]);
 
@@ -369,6 +380,7 @@ export default function App() {
     setToken(null);
     setMapItems([]);
     setLiveMatches([]);
+    setAlerts([]);
   };
 
   const handleSubmit = async (e) => {
@@ -431,6 +443,19 @@ export default function App() {
 
   return (
     <div className="app-wrapper">
+      {/* NEW: Emergency Alert Banner UI */}
+      {alerts.length > 0 && (
+        <div className="alert-banner">
+          ⚠️ {alerts[0].title}: {alerts[0].body}
+          <button
+            className="btn-close-alert"
+            onClick={() => setAlerts(alerts.slice(1))}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
 
       <button onClick={handleLogout} className="btn-logout">
@@ -474,7 +499,10 @@ export default function App() {
         onUpdateMatchStatus={handleUpdateMatchStatus}
       />
 
-      <div className="map-fullscreen">
+      {/* NEW: Dynamically adjust map height if alerts are present */}
+      <div
+        className={`map-fullscreen ${alerts.length > 0 ? "map-fullscreen-pushed" : ""}`}
+      >
         <MapContainer
           center={CENTER}
           zoom={13}
