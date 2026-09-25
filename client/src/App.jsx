@@ -308,7 +308,7 @@ export default function App() {
   const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
 
   useEffect(() => {
-    if (!token) return; // Don't fetch if not logged in
+    if (!token) return;
 
     Promise.all([
       axios.get(
@@ -319,14 +319,14 @@ export default function App() {
         `${API_URL}/resources?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=15`,
         getHeaders(),
       ),
-      axios.get(`${API_URL}/alerts`, getHeaders()), // Fetch active alerts
+      axios.get(`${API_URL}/alerts`, getHeaders()),
     ])
       .then(([reqRes, resRes, alertRes]) => {
         setMapItems([
           ...reqRes.data.requests.map((r) => ({ ...r, type: "request" })),
           ...resRes.data.resources.map((r) => ({ ...r, type: "resource" })),
         ]);
-        setAlerts(alertRes.data.alerts); // Store the fetched alerts
+        setAlerts(alertRes.data.alerts);
       })
       .catch((err) => console.error("Load failed:", err));
 
@@ -360,7 +360,6 @@ export default function App() {
       }
     });
 
-    // NEW: Listen for remote alerts
     socket.on("alert:new", (newAlert) => {
       setAlerts((prev) => [newAlert, ...prev]);
     });
@@ -371,7 +370,7 @@ export default function App() {
       socket.off("match:new");
       socket.off("item:resolved");
       socket.off("match:updated");
-      socket.off("alert:new"); // Clean up alert listener
+      socket.off("alert:new");
     };
   }, [token]);
 
@@ -443,7 +442,7 @@ export default function App() {
 
   return (
     <div className="app-wrapper">
-      {/* NEW: Emergency Alert Banner UI */}
+      {/* Alert Banner naturally pushes the rest of the UI down */}
       {alerts.length > 0 && (
         <div className="alert-banner">
           ⚠️ {alerts[0].title}: {alerts[0].body}
@@ -456,122 +455,123 @@ export default function App() {
         </div>
       )}
 
-      {toast && <div className="toast">{toast}</div>}
+      {/* Main UI Container */}
+      <div className="main-content">
+        {toast && <div className="toast">{toast}</div>}
 
-      <button onClick={handleLogout} className="btn-logout">
-        Logout
-      </button>
+        <button onClick={handleLogout} className="btn-logout">
+          Logout
+        </button>
 
-      <button
-        onClick={() => setIsPanelOpen(!isPanelOpen)}
-        className="toggle-btn"
-        style={{ left: isPanelOpen ? "320px" : "100px" }}
-      >
-        {isPanelOpen ? "◀ Close" : "▶ Dispatch"}
-      </button>
-
-      <button
-        onClick={() => setIsDashOpen(!isDashOpen)}
-        className="toggle-btn"
-        style={{
-          right: isDashOpen ? "320px" : "0",
-          left: "auto",
-          borderRadius: "8px 0 0 8px",
-        }}
-      >
-        {isDashOpen ? "Close ▶" : "◀ Matches"}
-      </button>
-
-      <SidebarForm
-        {...{
-          isPanelOpen,
-          formType,
-          setFormType,
-          formData,
-          setFormData,
-          handleSubmit,
-        }}
-      />
-      <MatchDashboard
-        isDashOpen={isDashOpen}
-        matches={liveMatches}
-        mapItems={mapItems}
-        onUpdateMatchStatus={handleUpdateMatchStatus}
-      />
-
-      {/* NEW: Dynamically adjust map height if alerts are present */}
-      <div
-        className={`map-fullscreen ${alerts.length > 0 ? "map-fullscreen-pushed" : ""}`}
-      >
-        <MapContainer
-          center={CENTER}
-          zoom={13}
-          style={{ height: "100%", width: "100%" }}
+        <button
+          onClick={() => setIsPanelOpen(!isPanelOpen)}
+          className="toggle-btn"
+          style={{ left: isPanelOpen ? "320px" : "115px" }}
         >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <MapClickHandler setFormData={setFormData} />
+          {isPanelOpen ? "◀ Close" : "▶ Dispatch"}
+        </button>
 
-          {mapItems.map((item) => (
-            <Marker
-              key={item.id}
-              position={[item.lat, item.lng]}
-              icon={
-                item.type === "resource"
-                  ? ICONS.resource
-                  : ICONS[item.urgency] || ICONS.high
-              }
-            >
-              <Popup>
-                <b>
-                  {item.type.toUpperCase()}: {item.category}
-                </b>
-                <br />
-                {item.type === "request" && (
-                  <span>
-                    Urgency: {item.urgency}
-                    <br />
-                  </span>
-                )}
-                {item.description}
-                <br />
-                <small>Status: {item.status}</small>
-                {item.id && (
-                  <button
-                    onClick={() => handleResolve(item.id, item.type)}
-                    className="btn btn-gray"
-                  >
-                    ✓ Mark as Resolved
-                  </button>
-                )}
-              </Popup>
-            </Marker>
-          ))}
+        <button
+          onClick={() => setIsDashOpen(!isDashOpen)}
+          className="toggle-btn"
+          style={{
+            right: isDashOpen ? "320px" : "0",
+            left: "auto",
+            borderRadius: "8px 0 0 8px",
+          }}
+        >
+          {isDashOpen ? "Close ▶" : "◀ Matches"}
+        </button>
 
-          {liveMatches.map((match) => {
-            const req = mapItems.find((i) => i.id === match.requestId);
-            const res = mapItems.find((i) => i.id === match.resourceId);
-            if (!req || !res) return null;
+        <SidebarForm
+          {...{
+            isPanelOpen,
+            formType,
+            setFormType,
+            formData,
+            setFormData,
+            handleSubmit,
+          }}
+        />
 
-            return (
-              <Polyline
-                key={match.id}
-                positions={[
-                  [req.lat, req.lng],
-                  [res.lat, res.lng],
-                ]}
-                color={match.status === "accepted" ? "#28a745" : "#0dcaf0"}
-                weight={4}
-                dashArray={match.status === "accepted" ? "" : "10, 10"}
-              />
-            );
-          })}
+        <MatchDashboard
+          isDashOpen={isDashOpen}
+          matches={liveMatches}
+          mapItems={mapItems}
+          onUpdateMatchStatus={handleUpdateMatchStatus}
+        />
 
-          {formData.lat && formData.lng && (
-            <Marker position={[formData.lat, formData.lng]} opacity={0.6}>
-              <Popup>Target Location</Popup>
-            </Marker>
-          )}
-        </MapContainer>
+        <div className="map-fullscreen">
+          <MapContainer
+            center={CENTER}
+            zoom={13}
+            style={{ height: "100%", width: "100%" }}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <MapClickHandler setFormData={setFormData} />
+
+            {mapItems.map((item) => (
+              <Marker
+                key={item.id}
+                position={[item.lat, item.lng]}
+                icon={
+                  item.type === "resource"
+                    ? ICONS.resource
+                    : ICONS[item.urgency] || ICONS.high
+                }
+              >
+                <Popup>
+                  <b>
+                    {item.type.toUpperCase()}: {item.category}
+                  </b>
+                  <br />
+                  {item.type === "request" && (
+                    <span>
+                      Urgency: {item.urgency}
+                      <br />
+                    </span>
+                  )}
+                  {item.description}
+                  <br />
+                  <small>Status: {item.status}</small>
+                  {item.id && (
+                    <button
+                      onClick={() => handleResolve(item.id, item.type)}
+                      className="btn btn-gray"
+                    >
+                      ✓ Mark as Resolved
+                    </button>
+                  )}
+                </Popup>
+              </Marker>
+            ))}
+
+            {liveMatches.map((match) => {
+              const req = mapItems.find((i) => i.id === match.requestId);
+              const res = mapItems.find((i) => i.id === match.resourceId);
+              if (!req || !res) return null;
+
+              return (
+                <Polyline
+                  key={match.id}
+                  positions={[
+                    [req.lat, req.lng],
+                    [res.lat, res.lng],
+                  ]}
+                  color={match.status === "accepted" ? "#28a745" : "#0dcaf0"}
+                  weight={4}
+                  dashArray={match.status === "accepted" ? "" : "10, 10"}
+                />
+              );
+            })}
+
+            {formData.lat && formData.lng && (
+              <Marker position={[formData.lat, formData.lng]} opacity={0.6}>
+                <Popup>Target Location</Popup>
+              </Marker>
+            )}
+          </MapContainer>
+        </div>
       </div>
     </div>
   );
