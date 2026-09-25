@@ -1,21 +1,85 @@
 /* client/src/App.css */
+
+/* Global Reset */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: sans-serif;
+}
+
+/* Flex Layout wrapper - Naturally pushes content down */
 .app-wrapper {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
-  font-family: sans-serif;
   overflow: hidden;
 }
+
+/* Emergency Alert Banner */
+.alert-banner {
+  background: #dc3545;
+  color: white;
+  padding: 12px 20px;
+  text-align: center;
+  font-weight: bold;
+  z-index: 2005;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+.btn-close-alert {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px 12px;
+  font-size: 12px;
+  transition: 0.2s;
+}
+.btn-close-alert:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* Main UI Container */
+.main-content {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Map Container */
 .map-fullscreen {
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   position: absolute;
   top: 0;
   left: 0;
   z-index: 1;
 }
 
-/* Panel & Toggle */
+/* Floating UI Buttons */
+.btn-logout {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1001;
+  padding: 12px 16px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+}
 .toggle-btn {
   position: absolute;
   top: 20px;
@@ -27,115 +91,103 @@
   border-radius: 0 8px 8px 0;
   cursor: pointer;
   font-weight: bold;
-  transition: left 0.3s ease;
+  transition:
+    left 0.3s ease,
+    right 0.3s ease;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
 }
-.side-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  width: 320px;
-  background: #fff;
-  box-shadow: 2px 0 15px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  overflow-y: auto;
-  transition: transform 0.3s ease;
-  padding: 20px;
-  box-sizing: border-box;
-}
-.panel-open {
-  transform: translateX(0);
-}
-.panel-closed {
-  transform: translateX(-100%);
-}
 
-/* Forms & UI */
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-.form-input {
-  width: 100%;
-  padding: 8px;
-  margin-top: 5px;
-  box-sizing: border-box;
-}
-.coord-box {
-  padding: 10px;
-  background: #e9ecef;
-  border-radius: 4px;
-  font-size: 14px;
-}
-.toast {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #0dcaf0;
-  color: #000;
-  padding: 12px 24px;
-  border-radius: 30px;
-  font-weight: bold;
-  z-index: 2000;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  animation: fadeIn 0.3s ease;
-}
-
-/* Buttons */
+/* Shared Button Styles */
 .btn {
   padding: 10px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
+  margin-top: 10px;
+  color: white;
 }
 .btn-red {
   background: #dc3545;
-  color: white;
 }
 .btn-green {
   background: #28a745;
-  color: white;
-}
-.btn-gray {
-  background: #6c757d;
-  color: white;
-  margin-top: 10px;
-  width: 100%;
 }
 .btn-inactive {
-  background: #e9ecef;
-  color: black;
+  background: #6c757d;
 }
-.flex-row {
-  display: flex;
-  gap: 10px;
-  margin: 30px 0 20px 0;
+.btn-gray {
+  background: #495057;
+  margin-top: 5px;
+  width: 100%;
 }
 .flex-1 {
   flex: 1;
+  margin: 0 5px;
 }
-/* Dashboard Additions */
+.flex-row {
+  display: flex;
+  margin-bottom: 15px;
+}
+
+/* Side Panels (Dispatch & Dashboard) */
+.side-panel,
 .dash-panel {
   position: absolute;
   top: 0;
-  right: 0;
   height: 100%;
   width: 320px;
   background: #fff;
-  box-shadow: -2px 0 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
   z-index: 1000;
   overflow-y: auto;
   transition: transform 0.3s ease;
   padding: 20px;
   box-sizing: border-box;
 }
+.side-panel {
+  left: 0;
+}
+.panel-closed {
+  transform: translateX(-100%);
+}
+.panel-open {
+  transform: translateX(0);
+}
+
+.dash-panel {
+  right: 0;
+}
 .dash-closed {
   transform: translateX(100%);
 }
+.dash-open {
+  transform: translateX(0);
+}
+
+/* Forms */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.form-input {
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 5px;
+}
+.coord-box {
+  background: #e9ecef;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Match Cards */
 .match-card {
   border: 1px solid #dee2e6;
   padding: 12px;
@@ -143,6 +195,22 @@
   margin-bottom: 12px;
   background: #f8f9fa;
 }
+
+/* Toast Notifications */
+.toast {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  z-index: 2000;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  font-weight: bold;
+}
+
 /* Auth Screen */
 .auth-overlay {
   position: absolute;
@@ -163,53 +231,10 @@
   width: 100%;
   max-width: 400px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box;
 }
 .auth-title {
   margin-top: 0;
   margin-bottom: 20px;
   text-align: center;
-}
-.btn-logout {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 1001;
-  padding: 8px 12px;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
-}
-.alert-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  background: #dc3545;
-  color: white;
-  padding: 10px 20px;
-  text-align: center;
-  font-weight: bold;
-  z-index: 2005;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  align-items: center;
-}
-.map-fullscreen-pushed {
-  top: 40px;
-  height: calc(100vh - 40px);
-}
-.btn-close-alert {
-  background: transparent;
-  border: 1px solid white;
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 2px 8px;
-  font-size: 12px;
 }
