@@ -7,6 +7,7 @@ import {
   Popup,
   useMapEvents,
   Polyline,
+  ZoomControl, // Added to move zoom buttons
 } from "react-leaflet";
 import L from "leaflet";
 import axios from "axios";
@@ -442,7 +443,7 @@ export default function App() {
 
   return (
     <div className="app-wrapper">
-      {/* Alert Banner naturally pushes the rest of the UI down */}
+      {/* Alert Banner */}
       {alerts.length > 0 && (
         <div className="alert-banner">
           ⚠️ {alerts[0].title}: {alerts[0].body}
@@ -455,18 +456,25 @@ export default function App() {
         </div>
       )}
 
+      {/* New Top Navbar */}
+      <header className="navbar">
+        <h2>TimeChamp Dispatch</h2>
+        <button onClick={handleLogout} className="btn-logout-nav">
+          Logout
+        </button>
+      </header>
+
       {/* Main UI Container */}
       <div className="main-content">
         {toast && <div className="toast">{toast}</div>}
 
-        <button onClick={handleLogout} className="btn-logout">
-          Logout
-        </button>
-
         <button
           onClick={() => setIsPanelOpen(!isPanelOpen)}
           className="toggle-btn"
-          style={{ left: isPanelOpen ? "320px" : "115px" }}
+          style={{
+            left: isPanelOpen ? "320px" : "0",
+            borderRadius: "0 8px 8px 0",
+          }}
         >
           {isPanelOpen ? "◀ Close" : "▶ Dispatch"}
         </button>
@@ -493,7 +501,6 @@ export default function App() {
             handleSubmit,
           }}
         />
-
         <MatchDashboard
           isDashOpen={isDashOpen}
           matches={liveMatches}
@@ -506,10 +513,12 @@ export default function App() {
             center={CENTER}
             zoom={13}
             style={{ height: "100%", width: "100%" }}
+            zoomControl={false} /* Disabled default top-left zoom controls */
           >
+            <ZoomControl position="bottomright" />{" "}
+            {/* Moved controls to bottom-right */}
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <MapClickHandler setFormData={setFormData} />
-
             {mapItems.map((item) => (
               <Marker
                 key={item.id}
@@ -545,7 +554,6 @@ export default function App() {
                 </Popup>
               </Marker>
             ))}
-
             {liveMatches.map((match) => {
               const req = mapItems.find((i) => i.id === match.requestId);
               const res = mapItems.find((i) => i.id === match.resourceId);
@@ -564,7 +572,6 @@ export default function App() {
                 />
               );
             })}
-
             {formData.lat && formData.lng && (
               <Marker position={[formData.lat, formData.lng]} opacity={0.6}>
                 <Popup>Target Location</Popup>
