@@ -91,7 +91,9 @@ const AuthScreen = ({ onLogin }) => {
                 className="form-input"
               />
             </label>
-            
+            <button type="submit" className="btn btn-green">
+              Send OTP
+            </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="form-group">
