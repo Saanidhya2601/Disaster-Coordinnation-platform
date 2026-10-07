@@ -22,7 +22,7 @@ const createResource = async (req, res) => {
       ) VALUES (
         gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
         ${quantityAvailable ? String(quantityAvailable) : "1"}, 
-        ST_MakePoint(${lng}, ${lat})::geography, 'available'::"ResourceStatus", NOW()
+        ST_MakePoint(${parseFloat(lng)}, ${parseFloat(lat)})::geography, 'available'::"ResourceStatus", NOW()
       ) 
       RETURNING id, category, description, status;
     `;

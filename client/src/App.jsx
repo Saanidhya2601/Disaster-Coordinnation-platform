@@ -34,6 +34,21 @@ const ICONS = {
   resource: getIcon("green"),
 };
 
+// --- HELPER: Fallback Distance Calculator (Haversine Formula) ---
+const getStraightLineDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return (R * c).toFixed(2);
+};
+
 // --- AUTH COMPONENT ---
 const AuthScreen = ({ onLogin }) => {
   const [step, setStep] = useState(1);
@@ -76,7 +91,7 @@ const AuthScreen = ({ onLogin }) => {
   return (
     <div className="auth-overlay">
       <div className="auth-card">
-        <h2 className="auth-title">📍 TimeChamp</h2>
+        <h2 className="auth-title">📍 RescueBridge</h2>
         {step === 1 ? (
           <form onSubmit={handleSendOtp} className="form-group">
             <label>
@@ -152,7 +167,7 @@ const MapClickHandler = ({ setFormData, openPanel }) => {
         lat: e.latlng.lat.toFixed(6),
         lng: e.latlng.lng.toFixed(6),
       }));
-      openPanel(); // Auto-open panel when clicking the map
+      openPanel();
     },
   });
   return null;
@@ -306,19 +321,50 @@ const MatchDashboard = ({
 
       return (
         <div key={match.id} className="match-card">
-          <p
-            style={{ margin: "0 0 8px 0", fontSize: "14px", color: "#374151" }}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
           >
-            <strong>Request:</strong> {req.category.toUpperCase()}
-            <span style={{ color: "#ef4444", marginLeft: "8px" }}>
-              ({req.urgency})
-            </span>
-          </p>
-          <p
-            style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#374151" }}
-          >
-            <strong>Resource:</strong> {res.category.toUpperCase()}
-          </p>
+            <div>
+              <p
+                style={{
+                  margin: "0 0 6px 0",
+                  fontSize: "14px",
+                  color: "#374151",
+                }}
+              >
+                <strong>Request:</strong> {req.category.toUpperCase()}
+                <span style={{ color: "#ef4444", marginLeft: "8px" }}>
+                  ({req.urgency})
+                </span>
+              </p>
+              <p
+                style={{
+                  margin: "0 0 6px 0",
+                  fontSize: "14px",
+                  color: "#374151",
+                }}
+              >
+                <strong>Resource:</strong> {res.category.toUpperCase()}
+              </p>
+              <p
+                style={{
+                  margin: "0 0 12px 0",
+                  fontSize: "14px",
+                  color: "#3b82f6",
+                  fontWeight: "bold",
+                }}
+              >
+                📍{" "}
+                {match.distanceKm
+                  ? `${match.distanceKm} km away`
+                  : "Calculating route..."}
+              </p>
+            </div>
+          </div>
           <div className="match-tag">{match.status}</div>
 
           {match.status === "proposed" && (
@@ -367,7 +413,6 @@ export default function App() {
 
   const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
 
-  // Exclusivity toggles for mobile-friendliness
   const togglePanel = () => {
     setIsPanelOpen(!isPanelOpen);
     if (!isPanelOpen) setIsDashOpen(false);
@@ -377,6 +422,84 @@ export default function App() {
     setIsDashOpen(!isDashOpen);
     if (!isDashOpen) setIsPanelOpen(false);
   };
+
+  // NEW: Background Routing Engine to trace streets and calculate distance
+  useEffect(() => {
+    const fetchMissingRoutes = async () => {
+      // Find matches that don't have a route yet and aren't currently being fetched
+      const matchesNeedingRoutes = liveMatches.filter(
+        (m) => !m.routePath && !m.isFetchingRoute,
+      );
+      if (matchesNeedingRoutes.length === 0) return;
+
+      // Mark them as fetching to avoid duplicate API calls
+      setLiveMatches((prev) =>
+        prev.map((m) =>
+          matchesNeedingRoutes.find((needs) => needs.id === m.id)
+            ? { ...m, isFetchingRoute: true }
+            : m,
+        ),
+      );
+
+      const updatedMatches = await Promise.all(
+        matchesNeedingRoutes.map(async (match) => {
+          const req = mapItems.find((i) => i.id === match.requestId);
+          const res = mapItems.find((i) => i.id === match.resourceId);
+
+          if (!req || !res) return { ...match, isFetchingRoute: false };
+
+          try {
+            // Fetch route from Open Source Routing Machine (OSRM)
+            // Note: OSRM takes coordinates as Longitude,Latitude
+            const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${res.lng},${res.lat};${req.lng},${req.lat}?overview=full&geometries=geojson`;
+            const response = await axios.get(osrmUrl);
+            const data = response.data.routes[0];
+
+            // GeoJSON returns [lng, lat], but Leaflet Polyline needs [lat, lng]
+            const routePath = data.geometry.coordinates.map((coord) => [
+              coord[1],
+              coord[0],
+            ]);
+            const distanceKm = (data.distance / 1000).toFixed(2); // Convert meters to km
+
+            return { ...match, routePath, distanceKm, isFetchingRoute: false };
+          } catch (err) {
+            console.error(
+              `OSRM Routing failed for match ${match.id}, falling back to straight line.`,
+            );
+            // Fallback to straight-line distance if API fails
+            const distanceKm = getStraightLineDistance(
+              req.lat,
+              req.lng,
+              res.lat,
+              res.lng,
+            );
+            return {
+              ...match,
+              routePath: [
+                [req.lat, req.lng],
+                [res.lat, res.lng],
+              ],
+              distanceKm,
+              isFetchingRoute: false,
+            };
+          }
+        }),
+      );
+
+      // Merge the new route data back into state
+      setLiveMatches((prev) =>
+        prev.map((m) => {
+          const updated = updatedMatches.find((u) => u.id === m.id);
+          return updated ? updated : m;
+        }),
+      );
+    };
+
+    if (mapItems.length > 0) {
+      fetchMissingRoutes();
+    }
+  }, [liveMatches, mapItems]);
 
   useEffect(() => {
     if (!token) return;
@@ -425,8 +548,17 @@ export default function App() {
       if (updatedMatch.status === "cancelled") {
         setLiveMatches((prev) => prev.filter((m) => m.id !== updatedMatch.id));
       } else {
+        // Maintain the existing route data when status changes to avoid recalculating
         setLiveMatches((prev) =>
-          prev.map((m) => (m.id === updatedMatch.id ? updatedMatch : m)),
+          prev.map((m) =>
+            m.id === updatedMatch.id
+              ? {
+                  ...updatedMatch,
+                  routePath: m.routePath,
+                  distanceKm: m.distanceKm,
+                }
+              : m,
+          ),
         );
       }
     });
@@ -534,7 +666,7 @@ export default function App() {
 
       {/* Top Navbar */}
       <header className="navbar">
-        <h2>📍 TimeChamp</h2>
+        <h2>📍 RescueBridge</h2>
         <button onClick={handleLogout} className="btn-logout-nav">
           Logout
         </button>
@@ -712,13 +844,16 @@ export default function App() {
               const res = mapItems.find((i) => i.id === match.resourceId);
               if (!req || !res) return null;
 
+              // Use the fetched street route if available, otherwise fallback to straight line
+              const pathPositions = match.routePath || [
+                [req.lat, req.lng],
+                [res.lat, res.lng],
+              ];
+
               return (
                 <Polyline
                   key={match.id}
-                  positions={[
-                    [req.lat, req.lng],
-                    [res.lat, res.lng],
-                  ]}
+                  positions={pathPositions}
                   color={match.status === "accepted" ? "#10b981" : "#3b82f6"}
                   weight={5}
                   opacity={0.8}

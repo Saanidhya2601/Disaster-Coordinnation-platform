@@ -7,18 +7,10 @@ const {
 } = require("../services/matching.service");
 
 const createRequest = async (req, res) => {
-  const {
-    category,
-    description,
-    urgency,
-    lat,
-    lng,
-    peopleAffected,
-    quantityNeeded,
-  } = req.body;
+  const { category, description, urgency, lat, lng } = req.body;
   const userId = req.user.id;
 
-  if (!lat || !lng || !category || !description || !urgency) {
+  if (!lat || !lng || !category || !description) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
@@ -26,11 +18,11 @@ const createRequest = async (req, res) => {
     const result = await prisma.$queryRaw`
       INSERT INTO "requests" (
         "id", "createdById", "category", "description", "urgency", 
-        "peopleAffected", "quantityNeeded", "location", "status", "updatedAt"
+        "location", "status", "updatedAt"
       ) VALUES (
-        gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, ${urgency}::"Urgency", 
-        ${peopleAffected || null}, ${quantityNeeded || null}, 
-        ST_MakePoint(${lng}, ${lat})::geography, 'open'::"RequestStatus", NOW()
+        gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
+        ${urgency || "high"}::"Urgency", 
+        ST_MakePoint(${parseFloat(lng)}, ${parseFloat(lat)})::geography, 'pending'::"RequestStatus", NOW()
       ) 
       RETURNING id, category, description, urgency, status;
     `;
@@ -45,7 +37,7 @@ const createRequest = async (req, res) => {
     }
 
     return res.status(201).json({
-      message: "Request created successfully",
+      message: "Request broadcasted successfully",
       request: newRequest,
       matchesFound: matches.length,
     });
