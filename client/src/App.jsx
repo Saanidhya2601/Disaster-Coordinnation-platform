@@ -7,7 +7,7 @@ import {
   Popup,
   useMapEvents,
   Polyline,
-  ZoomControl, // Added to move zoom buttons
+  ZoomControl,
 } from "react-leaflet";
 import L from "leaflet";
 import axios from "axios";
@@ -16,6 +16,7 @@ import "./App.css";
 
 const API_URL = "http://localhost:5000/api";
 const CENTER = [18.5204, 73.8567];
+
 const getIcon = (color) =>
   new L.Icon({
     iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
@@ -25,6 +26,7 @@ const getIcon = (color) =>
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],
   });
+
 const ICONS = {
   high: getIcon("red"),
   medium: getIcon("orange"),
@@ -38,19 +40,24 @@ const AuthScreen = ({ onLogin }) => {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [otp, setOtp] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       await axios.post(`${API_URL}/auth/otp/send`, { phone });
       setStep(2);
     } catch (err) {
       alert(err.response?.data?.error || "Failed to send OTP");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       const res = await axios.post(`${API_URL}/auth/otp/verify`, {
         phone,
@@ -61,17 +68,19 @@ const AuthScreen = ({ onLogin }) => {
       onLogin(res.data.token);
     } catch (err) {
       alert(err.response?.data?.error || "Invalid OTP");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="auth-overlay">
       <div className="auth-card">
-        <h2 className="auth-title">TimeChamp Dispatch</h2>
+        <h2 className="auth-title">📍 TimeChamp</h2>
         {step === 1 ? (
           <form onSubmit={handleSendOtp} className="form-group">
             <label>
-              <b>Phone Number</b>
+              Phone Number
               <input
                 type="text"
                 required
@@ -82,7 +91,7 @@ const AuthScreen = ({ onLogin }) => {
               />
             </label>
             <label>
-              <b>Name (New Users)</b>
+              Name (New Users)
               <input
                 type="text"
                 value={name}
@@ -91,14 +100,18 @@ const AuthScreen = ({ onLogin }) => {
                 className="form-input"
               />
             </label>
-            <button type="submit" className="btn btn-green">
-              Send OTP
+            <button
+              type="submit"
+              className="btn btn-green"
+              disabled={isLoading}
+            >
+              {isLoading ? "Sending..." : "Send OTP"}
             </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="form-group">
             <label>
-              <b>Enter OTP</b>
+              Enter OTP
               <input
                 type="text"
                 required
@@ -108,13 +121,18 @@ const AuthScreen = ({ onLogin }) => {
                 className="form-input"
               />
             </label>
-            <button type="submit" className="btn btn-green">
-              Verify & Login
+            <button
+              type="submit"
+              className="btn btn-green"
+              disabled={isLoading}
+            >
+              {isLoading ? "Verifying..." : "Verify & Login"}
             </button>
             <button
               type="button"
               onClick={() => setStep(1)}
               className="btn btn-inactive"
+              disabled={isLoading}
             >
               Back
             </button>
@@ -126,14 +144,15 @@ const AuthScreen = ({ onLogin }) => {
 };
 
 // --- MAP COMPONENTS ---
-const MapClickHandler = ({ setFormData }) => {
+const MapClickHandler = ({ setFormData, openPanel }) => {
   useMapEvents({
     click(e) {
       setFormData((prev) => ({
         ...prev,
-        lat: e.latlng.lat,
-        lng: e.latlng.lng,
+        lat: e.latlng.lat.toFixed(6),
+        lng: e.latlng.lng.toFixed(6),
       }));
+      openPanel(); // Auto-open panel when clicking the map
     },
   });
   return null;
@@ -141,13 +160,22 @@ const MapClickHandler = ({ setFormData }) => {
 
 const SidebarForm = ({
   isPanelOpen,
+  closePanel,
   formType,
   setFormType,
   formData,
   setFormData,
   handleSubmit,
+  isSubmitting,
 }) => (
   <div className={`side-panel ${isPanelOpen ? "panel-open" : "panel-closed"}`}>
+    <div className="panel-header">
+      <h3>Broadcast</h3>
+      <button className="btn-icon-close" onClick={closePanel}>
+        ✕
+      </button>
+    </div>
+
     <div className="flex-row">
       <button
         type="button"
@@ -164,9 +192,10 @@ const SidebarForm = ({
         Have Supplies
       </button>
     </div>
+
     <form onSubmit={handleSubmit} className="form-group">
       <label>
-        <b>Category</b>
+        Category
         <select
           value={formData.category}
           onChange={(e) =>
@@ -177,11 +206,14 @@ const SidebarForm = ({
           <option value="medical">Medical</option>
           <option value="food">Food</option>
           <option value="rescue">Rescue</option>
+          <option value="water">Water</option>
+          <option value="shelter">Shelter</option>
         </select>
       </label>
+
       {formType === "request" ? (
         <label>
-          <b>Urgency</b>
+          Urgency
           <select
             value={formData.urgency}
             onChange={(e) =>
@@ -189,6 +221,7 @@ const SidebarForm = ({
             }
             className="form-input"
           >
+            <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
@@ -196,7 +229,7 @@ const SidebarForm = ({
         </label>
       ) : (
         <label>
-          <b>Quantity</b>
+          Quantity Available
           <input
             type="number"
             min="1"
@@ -211,8 +244,9 @@ const SidebarForm = ({
           />
         </label>
       )}
+
       <label>
-        <b>Description</b>
+        Description
         <textarea
           value={formData.description}
           onChange={(e) =>
@@ -220,18 +254,25 @@ const SidebarForm = ({
           }
           required
           rows="3"
+          placeholder="Provide specific details..."
           className="form-input"
         />
       </label>
+
       <div className="coord-box">
-        <b>Lat:</b> {formData.lat || "Pending"} | <b>Lng:</b>{" "}
-        {formData.lng || "Pending"}
+        {formData.lat
+          ? `📍 ${formData.lat}, ${formData.lng}`
+          : "Tap map to set location"}
       </div>
+
       <button
         type="submit"
+        disabled={isSubmitting}
         className={`btn ${formType === "request" ? "btn-red" : "btn-green"}`}
       >
-        Broadcast {formType === "request" ? "Request" : "Resource"}
+        {isSubmitting
+          ? "Broadcasting..."
+          : `Broadcast ${formType === "request" ? "Request" : "Resource"}`}
       </button>
     </form>
   </div>
@@ -239,15 +280,25 @@ const SidebarForm = ({
 
 const MatchDashboard = ({
   isDashOpen,
+  closeDash,
   matches,
   mapItems,
   onUpdateMatchStatus,
 }) => (
   <div className={`dash-panel ${isDashOpen ? "dash-open" : "dash-closed"}`}>
-    <h3>Active Matches</h3>
+    <div className="panel-header">
+      <h3>Active Matches</h3>
+      <button className="btn-icon-close" onClick={closeDash}>
+        ✕
+      </button>
+    </div>
+
     {matches.length === 0 && (
-      <p style={{ color: "#666" }}>No active pairings.</p>
+      <p style={{ color: "#6b7280", textAlign: "center", marginTop: "20px" }}>
+        No active pairings found.
+      </p>
     )}
+
     {matches.map((match) => {
       const req = mapItems.find((i) => i.id === match.requestId);
       const res = mapItems.find((i) => i.id === match.resourceId);
@@ -255,16 +306,23 @@ const MatchDashboard = ({
 
       return (
         <div key={match.id} className="match-card">
-          <p style={{ margin: "0 0 8px 0", fontSize: "14px" }}>
-            <b>Request:</b> {req.category.toUpperCase()} ({req.urgency})
+          <p
+            style={{ margin: "0 0 8px 0", fontSize: "14px", color: "#374151" }}
+          >
+            <strong>Request:</strong> {req.category.toUpperCase()}
+            <span style={{ color: "#ef4444", marginLeft: "8px" }}>
+              ({req.urgency})
+            </span>
           </p>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-            <b>Resource:</b> {res.category.toUpperCase()}
+          <p
+            style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#374151" }}
+          >
+            <strong>Resource:</strong> {res.category.toUpperCase()}
           </p>
-          <small>Status: {match.status.toUpperCase()}</small>
+          <div className="match-tag">{match.status}</div>
 
           {match.status === "proposed" && (
-            <div className="flex-row" style={{ margin: "10px 0 0 0" }}>
+            <div className="flex-row" style={{ margin: "16px 0 0 0" }}>
               <button
                 onClick={() => onUpdateMatchStatus(match.id, "accepted")}
                 className="btn btn-green flex-1"
@@ -292,6 +350,7 @@ export default function App() {
   const [liveMatches, setLiveMatches] = useState([]);
   const [toast, setToast] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isDashOpen, setIsDashOpen] = useState(false);
@@ -307,6 +366,17 @@ export default function App() {
   });
 
   const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
+
+  // Exclusivity toggles for mobile-friendliness
+  const togglePanel = () => {
+    setIsPanelOpen(!isPanelOpen);
+    if (!isPanelOpen) setIsDashOpen(false);
+  };
+
+  const toggleDash = () => {
+    setIsDashOpen(!isDashOpen);
+    if (!isDashOpen) setIsPanelOpen(false);
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -361,9 +431,9 @@ export default function App() {
       }
     });
 
-    socket.on("alert:new", (newAlert) => {
-      setAlerts((prev) => [newAlert, ...prev]);
-    });
+    socket.on("alert:new", (newAlert) =>
+      setAlerts((prev) => [newAlert, ...prev]),
+    );
 
     return () => {
       socket.off("request:new");
@@ -386,7 +456,9 @@ export default function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.lat || !formData.lng)
-      return alert("Click map to set location.");
+      return alert("Please tap the map to set a location.");
+
+    setIsSubmitting(true);
     try {
       await axios.post(`${API_URL}/${formType}s`, formData, getHeaders());
       setFormData({
@@ -398,8 +470,12 @@ export default function App() {
         lng: "",
       });
       setIsPanelOpen(false);
+      setToast("✅ Broadcast successful!");
+      setTimeout(() => setToast(null), 3000);
     } catch (error) {
-      alert("Post failed.");
+      alert("Failed to broadcast. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -421,7 +497,7 @@ export default function App() {
     } catch (error) {
       setMapItems(previousMapItems);
       setLiveMatches(previousMatches);
-      alert("Database update failed!");
+      alert("Status update failed! Reverting view.");
     }
   };
 
@@ -437,16 +513,16 @@ export default function App() {
     }
   };
 
-  if (!token) {
-    return <AuthScreen onLogin={setToken} />;
-  }
+  if (!token) return <AuthScreen onLogin={setToken} />;
 
   return (
     <div className="app-wrapper">
       {/* Alert Banner */}
       {alerts.length > 0 && (
         <div className="alert-banner">
-          ⚠️ {alerts[0].title}: {alerts[0].body}
+          <span>
+            ⚠️ {alerts[0].title}: {alerts[0].body}
+          </span>
           <button
             className="btn-close-alert"
             onClick={() => setAlerts(alerts.slice(1))}
@@ -456,9 +532,9 @@ export default function App() {
         </div>
       )}
 
-      {/* New Top Navbar */}
+      {/* Top Navbar */}
       <header className="navbar">
-        <h2>TimeChamp Dispatch</h2>
+        <h2>📍 TimeChamp</h2>
         <button onClick={handleLogout} className="btn-logout-nav">
           Logout
         </button>
@@ -469,40 +545,56 @@ export default function App() {
         {toast && <div className="toast">{toast}</div>}
 
         <button
-          onClick={() => setIsPanelOpen(!isPanelOpen)}
+          onClick={togglePanel}
           className="toggle-btn"
           style={{
-            left: isPanelOpen ? "320px" : "0",
+            left: "0",
             borderRadius: "0 8px 8px 0",
+            display: isPanelOpen ? "none" : "flex",
           }}
         >
-          {isPanelOpen ? "◀ Close" : "▶ Dispatch"}
+          ▶ Dispatch
         </button>
 
         <button
-          onClick={() => setIsDashOpen(!isDashOpen)}
+          onClick={toggleDash}
           className="toggle-btn"
           style={{
-            right: isDashOpen ? "320px" : "0",
-            left: "auto",
+            right: "0",
             borderRadius: "8px 0 0 8px",
+            display: isDashOpen ? "none" : "flex",
           }}
         >
-          {isDashOpen ? "Close ▶" : "◀ Matches"}
+          ◀ Matches
+          {liveMatches.length > 0 && (
+            <span
+              style={{
+                background: "#ef4444",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                fontSize: "12px",
+                marginLeft: "8px",
+              }}
+            >
+              {liveMatches.length}
+            </span>
+          )}
         </button>
 
         <SidebarForm
-          {...{
-            isPanelOpen,
-            formType,
-            setFormType,
-            formData,
-            setFormData,
-            handleSubmit,
-          }}
+          isPanelOpen={isPanelOpen}
+          closePanel={() => setIsPanelOpen(false)}
+          formType={formType}
+          setFormType={setFormType}
+          formData={formData}
+          setFormData={setFormData}
+          handleSubmit={handleSubmit}
+          isSubmitting={isSubmitting}
         />
+
         <MatchDashboard
           isDashOpen={isDashOpen}
+          closeDash={() => setIsDashOpen(false)}
           matches={liveMatches}
           mapItems={mapItems}
           onUpdateMatchStatus={handleUpdateMatchStatus}
@@ -513,12 +605,18 @@ export default function App() {
             center={CENTER}
             zoom={13}
             style={{ height: "100%", width: "100%" }}
-            zoomControl={false} /* Disabled default top-left zoom controls */
+            zoomControl={false}
           >
-            <ZoomControl position="bottomright" />{" "}
-            {/* Moved controls to bottom-right */}
+            <ZoomControl position="bottomright" />
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <MapClickHandler setFormData={setFormData} />
+            <MapClickHandler
+              setFormData={setFormData}
+              openPanel={() => {
+                setIsPanelOpen(true);
+                setIsDashOpen(false);
+              }}
+            />
+
             {mapItems.map((item) => (
               <Marker
                 key={item.id}
@@ -529,31 +627,86 @@ export default function App() {
                     : ICONS[item.urgency] || ICONS.high
                 }
               >
-                <Popup>
-                  <b>
-                    {item.type.toUpperCase()}: {item.category}
-                  </b>
-                  <br />
-                  {item.type === "request" && (
-                    <span>
-                      Urgency: {item.urgency}
-                      <br />
-                    </span>
-                  )}
-                  {item.description}
-                  <br />
-                  <small>Status: {item.status}</small>
-                  {item.id && (
-                    <button
-                      onClick={() => handleResolve(item.id, item.type)}
-                      className="btn btn-gray"
+                <Popup className="custom-popup">
+                  <div style={{ padding: "4px" }}>
+                    <h3
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: "15px",
+                        color: "#111827",
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
                     >
-                      ✓ Mark as Resolved
-                    </button>
-                  )}
+                      {item.category.toUpperCase()}
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "normal",
+                          color: "#6b7280",
+                        }}
+                      >
+                        {item.type === "request" ? "Need" : "Supply"}
+                      </span>
+                    </h3>
+
+                    <p
+                      style={{
+                        margin: "0 0 12px 0",
+                        color: "#4b5563",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {item.description}
+                    </p>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        marginBottom: "12px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {item.type === "request" && (
+                        <span
+                          style={{
+                            color: "#ef4444",
+                            background: "#fef2f2",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          {item.urgency} priority
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          color: "#10b981",
+                          background: "#ecfdf5",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+
+                    {item.id && (
+                      <button
+                        onClick={() => handleResolve(item.id, item.type)}
+                        className="btn btn-gray"
+                        style={{ width: "100%", padding: "8px" }}
+                      >
+                        ✓ Mark Resolved
+                      </button>
+                    )}
+                  </div>
                 </Popup>
               </Marker>
             ))}
+
             {liveMatches.map((match) => {
               const req = mapItems.find((i) => i.id === match.requestId);
               const res = mapItems.find((i) => i.id === match.resourceId);
@@ -566,15 +719,17 @@ export default function App() {
                     [req.lat, req.lng],
                     [res.lat, res.lng],
                   ]}
-                  color={match.status === "accepted" ? "#28a745" : "#0dcaf0"}
-                  weight={4}
-                  dashArray={match.status === "accepted" ? "" : "10, 10"}
+                  color={match.status === "accepted" ? "#10b981" : "#3b82f6"}
+                  weight={5}
+                  opacity={0.8}
+                  dashArray={match.status === "accepted" ? "" : "10, 12"}
                 />
               );
             })}
+
             {formData.lat && formData.lng && (
-              <Marker position={[formData.lat, formData.lng]} opacity={0.6}>
-                <Popup>Target Location</Popup>
+              <Marker position={[formData.lat, formData.lng]} opacity={0.7}>
+                <Popup>Selected Location</Popup>
               </Marker>
             )}
           </MapContainer>
