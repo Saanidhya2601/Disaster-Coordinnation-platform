@@ -6,6 +6,7 @@ const {
   findAndCreateMatchesForRequest,
 } = require("../services/matching.service");
 
+// server/src/controllers/request.controller.js
 const createRequest = async (req, res) => {
   const { category, description, urgency, lat, lng } = req.body;
   const userId = req.user.id;
@@ -21,9 +22,10 @@ const createRequest = async (req, res) => {
         "location", "status", "updatedAt"
       ) VALUES (
         gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
-        ${urgency || "high"}::"Urgency", 
-        ST_MakePoint(${parseFloat(lng)}, ${parseFloat(lat)})::geography, 'pending'::"RequestStatus", NOW()
-      ) 
+        ${urgency}::"Urgency", 
+        ST_MakePoint(${parseFloat(lng)}::double precision, ${parseFloat(lat)}::double precision)::geography, 
+        'YOUR_EXACT_SCHEMA_WORD_HERE'::"RequestStatus", NOW() 
+      )
       RETURNING id, category, description, urgency, status;
     `;
 
@@ -32,21 +34,19 @@ const createRequest = async (req, res) => {
     const io = req.app.get("io");
 
     io.emit("request:new", { ...newRequest, lat, lng });
-    if (matches.length > 0) {
-      io.emit("match:new", matches);
-    }
+    if (matches.length > 0) io.emit("match:new", matches);
 
-    return res.status(201).json({
-      message: "Request broadcasted successfully",
-      request: newRequest,
-      matchesFound: matches.length,
-    });
+    return res
+      .status(201)
+      .json({ message: "Request broadcasted", request: newRequest });
   } catch (error) {
     console.error("[REQUEST ERROR]", error);
-    return res.status(500).json({ error: "Failed to create request" });
+    // Send the actual error message to the frontend so we don't have to guess next time
+    return res
+      .status(500)
+      .json({ error: error.message || "Database insertion failed." });
   }
 };
-
 const getNearbyRequests = async (req, res) => {
   const { lat, lng, radiusKm = 10, category } = req.query;
 

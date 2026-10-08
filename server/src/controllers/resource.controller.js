@@ -22,7 +22,8 @@ const createResource = async (req, res) => {
       ) VALUES (
         gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
         ${quantityAvailable ? String(quantityAvailable) : "1"}, 
-        ST_MakePoint(${parseFloat(lng)}, ${parseFloat(lat)})::geography, 'available'::"ResourceStatus", NOW()
+        ST_MakePoint(${parseFloat(lng)}::double precision, ${parseFloat(lat)}::double precision)::geography, 
+        'YOUR_EXACT_SCHEMA_WORD_HERE'::"ResourceStatus", NOW()
       ) 
       RETURNING id, category, description, status;
     `;
@@ -32,18 +33,16 @@ const createResource = async (req, res) => {
     const io = req.app.get("io");
 
     io.emit("resource:new", { ...newResource, lat, lng });
-    if (matches.length > 0) {
-      io.emit("match:new", matches);
-    }
+    if (matches.length > 0) io.emit("match:new", matches);
 
-    return res.status(201).json({
-      message: "Resource created successfully",
-      resource: newResource,
-      matchesFound: matches.length,
-    });
+    return res
+      .status(201)
+      .json({ message: "Resource created", resource: newResource });
   } catch (error) {
     console.error("[RESOURCE ERROR]", error);
-    return res.status(500).json({ error: "Failed to create resource" });
+    return res
+      .status(500)
+      .json({ error: error.message || "Database insertion failed." });
   }
 };
 

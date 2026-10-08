@@ -605,7 +605,10 @@ export default function App() {
       setToast("✅ Broadcast successful!");
       setTimeout(() => setToast(null), 3000);
     } catch (error) {
-      alert("Failed to broadcast. Please try again.");
+      // NOW WE CAN SEE THE ACTUAL ERROR
+      const errorMsg =
+        error.response?.data?.error || error.message || "Failed to broadcast.";
+      alert(`Error: ${errorMsg}`);
     } finally {
       setIsSubmitting(false);
     }
