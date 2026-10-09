@@ -40,7 +40,7 @@ enum RequestStatus {
   matched
   fulfilled
   cancelled
-}
+} 
 
 enum ResourceStatus {
   available
