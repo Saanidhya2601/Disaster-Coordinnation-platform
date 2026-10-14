@@ -18,6 +18,15 @@ enum Role {
   admin
 }
 
+enum Category {
+  food
+  water
+  shelter
+  medical
+  clothing
+  rescue
+  other
+}
 
 enum Urgency {
   critical
