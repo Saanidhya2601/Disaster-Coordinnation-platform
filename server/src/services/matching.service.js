@@ -1,69 +1,61 @@
-// server/src/services/matching.service.js
-const prisma = require("../lib/prisma");
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
 
 const findAndCreateMatchesForRequest = async (requestId) => {
   try {
-    const matchingResources = await prisma.$queryRaw`
-      SELECT rs.id AS "resourceId"
-      FROM "resources" rs
-      JOIN "requests" rq ON rq.id = ${requestId}
-      WHERE rs.status = 'available'
-        AND rs.category = rq.category
-        AND ST_DWithin(rs.location, rq.location, 10000)
+    const nearbyResources = await prisma.$queryRaw`
+      SELECT r.id AS "resourceId"
+      FROM "resources" r
+      JOIN "requests" req ON req.id = ${requestId}
+      WHERE r.category = req.category
+        AND r.status = 'available'::"ResourceStatus"
+        AND ST_DWithin(r.location, req.location, 10000); -- 10km radius
     `;
 
-    if (matchingResources.length === 0) return [];
-
     const createdMatches = [];
-    for (const res of matchingResources) {
-      const existing = await prisma.match.findFirst({
-        where: { requestId, resourceId: res.resourceId },
+    for (const res of nearbyResources) {
+      const match = await prisma.match.create({
+        data: {
+          requestId,
+          resourceId: res.resourceId,
+          status: "proposed",
+        },
       });
-
-      if (!existing) {
-        const newMatch = await prisma.match.create({
-          data: { requestId, resourceId: res.resourceId, status: "proposed" },
-        });
-        createdMatches.push(newMatch);
-      }
+      createdMatches.push(match);
     }
     return createdMatches;
-  } catch (error) {
-    console.error("[MATCHING ERROR]", error);
-    throw error;
+  } catch (err) {
+    console.error("[MATCHING SERVICE ERROR - REQ]", err);
+    return [];
   }
 };
 
 const findAndCreateMatchesForResource = async (resourceId) => {
   try {
-    const matchingRequests = await prisma.$queryRaw`
-      SELECT rq.id AS "requestId"
-      FROM "requests" rq
-      JOIN "resources" rs ON rs.id = ${resourceId}
-      WHERE rq.status = 'open'
-        AND rq.category = rs.category
-        AND ST_DWithin(rq.location, rs.location, 10000)
+    const nearbyRequests = await prisma.$queryRaw`
+      SELECT req.id AS "requestId"
+      FROM "requests" req
+      JOIN "resources" r ON r.id = ${resourceId}
+      WHERE req.category = r.category
+        AND req.status = 'open'::"RequestStatus"
+        AND ST_DWithin(req.location, r.location, 10000); -- 10km radius
     `;
 
-    if (matchingRequests.length === 0) return [];
-
     const createdMatches = [];
-    for (const req of matchingRequests) {
-      const existing = await prisma.match.findFirst({
-        where: { requestId: req.requestId, resourceId },
+    for (const req of nearbyRequests) {
+      const match = await prisma.match.create({
+        data: {
+          requestId: req.requestId,
+          resourceId,
+          status: "proposed",
+        },
       });
-
-      if (!existing) {
-        const newMatch = await prisma.match.create({
-          data: { requestId: req.requestId, resourceId, status: "proposed" },
-        });
-        createdMatches.push(newMatch);
-      }
+      createdMatches.push(match);
     }
     return createdMatches;
-  } catch (error) {
-    console.error("[MATCHING ERROR]", error);
-    throw error;
+  } catch (err) {
+    console.error("[MATCHING SERVICE ERROR - RES]", err);
+    return [];
   }
 };
 
