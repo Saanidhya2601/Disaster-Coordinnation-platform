@@ -14,8 +14,8 @@ import axios from "axios";
 import socket from "./socket";
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api";
-const CENTER = [18.5204, 73.8567];
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const CENTER = [18.5204, 73.8567]; // Pune coordinates
 
 const getIcon = (color) =>
   new L.Icon({
@@ -28,15 +28,16 @@ const getIcon = (color) =>
   });
 
 const ICONS = {
+  critical: getIcon("red"),
   high: getIcon("red"),
   medium: getIcon("orange"),
   low: getIcon("gold"),
   resource: getIcon("green"),
 };
 
-// --- HELPER: Fallback Distance Calculator (Haversine Formula) ---
+// Haversine fallback calculator
 const getStraightLineDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -49,7 +50,7 @@ const getStraightLineDistance = (lat1, lon1, lat2, lon2) => {
   return (R * c).toFixed(2);
 };
 
-// --- AUTH COMPONENT ---
+// --- AUTH SCREEN ---
 const AuthScreen = ({ onLogin }) => {
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState("");
@@ -101,23 +102,23 @@ const AuthScreen = ({ onLogin }) => {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91..."
+                placeholder="+91 98765 43210"
                 className="form-input"
               />
             </label>
             <label>
-              Name (New Users)
+              Full Name
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Doe"
+                placeholder="Responder Name"
                 className="form-input"
               />
             </label>
             <button
               type="submit"
-              className="btn btn-green"
+              className="btn btn-indigo"
               disabled={isLoading}
             >
               {isLoading ? "Sending..." : "Send OTP"}
@@ -126,7 +127,7 @@ const AuthScreen = ({ onLogin }) => {
         ) : (
           <form onSubmit={handleVerifyOtp} className="form-group">
             <label>
-              Enter OTP
+              Enter 6-Digit OTP (Dev: 123456)
               <input
                 type="text"
                 required
@@ -138,10 +139,10 @@ const AuthScreen = ({ onLogin }) => {
             </label>
             <button
               type="submit"
-              className="btn btn-green"
+              className="btn btn-indigo"
               disabled={isLoading}
             >
-              {isLoading ? "Verifying..." : "Verify & Login"}
+              {isLoading ? "Verifying..." : "Verify & Launch"}
             </button>
             <button
               type="button"
@@ -158,14 +159,14 @@ const AuthScreen = ({ onLogin }) => {
   );
 };
 
-// --- MAP COMPONENTS ---
+// --- MAP CLICK HANDLER ---
 const MapClickHandler = ({ setFormData, openPanel }) => {
   useMapEvents({
     click(e) {
       setFormData((prev) => ({
         ...prev,
-        lat: e.latlng.lat.toFixed(6),
-        lng: e.latlng.lng.toFixed(6),
+        lat: Number(e.latlng.lat.toFixed(6)),
+        lng: Number(e.latlng.lng.toFixed(6)),
       }));
       openPanel();
     },
@@ -173,6 +174,7 @@ const MapClickHandler = ({ setFormData, openPanel }) => {
   return null;
 };
 
+// --- DISPATCH SIDEBAR ---
 const SidebarForm = ({
   isPanelOpen,
   closePanel,
@@ -185,8 +187,8 @@ const SidebarForm = ({
 }) => (
   <div className={`side-panel ${isPanelOpen ? "panel-open" : "panel-closed"}`}>
     <div className="panel-header">
-      <h3>Broadcast</h3>
-      <button className="btn-icon-close" onClick={closePanel}>
+      <h3>Broadcast Dispatch</h3>
+      <button type="button" className="btn-icon-close" onClick={closePanel}>
         ✕
       </button>
     </div>
@@ -228,7 +230,7 @@ const SidebarForm = ({
 
       {formType === "request" ? (
         <label>
-          Urgency
+          Urgency Level
           <select
             value={formData.urgency}
             onChange={(e) =>
@@ -252,7 +254,7 @@ const SidebarForm = ({
             onChange={(e) =>
               setFormData({
                 ...formData,
-                quantityAvailable: parseInt(e.target.value),
+                quantityAvailable: parseInt(e.target.value, 10) || 1,
               })
             }
             className="form-input"
@@ -261,7 +263,7 @@ const SidebarForm = ({
       )}
 
       <label>
-        Description
+        Situation / Supply Details
         <textarea
           value={formData.description}
           onChange={(e) =>
@@ -269,15 +271,15 @@ const SidebarForm = ({
           }
           required
           rows="3"
-          placeholder="Provide specific details..."
+          placeholder="Provide clear landmarks, headcount, or supply specifics..."
           className="form-input"
         />
       </label>
 
       <div className="coord-box">
-        {formData.lat
+        {formData.lat && formData.lng
           ? `📍 ${formData.lat}, ${formData.lng}`
-          : "Tap map to set location"}
+          : "Tap anywhere on the map to set coordinates"}
       </div>
 
       <button
@@ -293,6 +295,7 @@ const SidebarForm = ({
   </div>
 );
 
+// --- MATCH DASHBOARD ---
 const MatchDashboard = ({
   isDashOpen,
   closeDash,
@@ -302,15 +305,23 @@ const MatchDashboard = ({
 }) => (
   <div className={`dash-panel ${isDashOpen ? "dash-open" : "dash-closed"}`}>
     <div className="panel-header">
-      <h3>Active Matches</h3>
-      <button className="btn-icon-close" onClick={closeDash}>
+      <h3>Active Pairings</h3>
+      <button type="button" className="btn-icon-close" onClick={closeDash}>
         ✕
       </button>
     </div>
 
     {matches.length === 0 && (
-      <p style={{ color: "#6b7280", textAlign: "center", marginTop: "20px" }}>
-        No active pairings found.
+      <p
+        style={{
+          color: "#64748b",
+          textAlign: "center",
+          marginTop: "24px",
+          fontSize: "14px",
+        }}
+      >
+        No active matches yet. Drop matching Need & Supply pins within 10km to
+        auto-pair.
       </p>
     )}
 
@@ -321,65 +332,51 @@ const MatchDashboard = ({
 
       return (
         <div key={match.id} className="match-card">
-          <div
+          <p style={{ margin: "0 0 6px 0", fontSize: "14px" }}>
+            <strong>Request:</strong> {req.category.toUpperCase()}
+            <span
+              style={{ color: "#ef4444", marginLeft: "6px", fontWeight: 600 }}
+            >
+              ({req.urgency})
+            </span>
+          </p>
+          <p
+            style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#475569" }}
+          >
+            {req.description}
+          </p>
+          <p style={{ margin: "0 0 8px 0", fontSize: "14px" }}>
+            <strong>Supply:</strong> {res.category.toUpperCase()} (
+            {res.description})
+          </p>
+          <p
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
+              margin: "0 0 10px 0",
+              fontSize: "13px",
+              color: "#4f46e5",
+              fontWeight: 700,
             }}
           >
-            <div>
-              <p
-                style={{
-                  margin: "0 0 6px 0",
-                  fontSize: "14px",
-                  color: "#374151",
-                }}
-              >
-                <strong>Request:</strong> {req.category.toUpperCase()}
-                <span style={{ color: "#ef4444", marginLeft: "8px" }}>
-                  ({req.urgency})
-                </span>
-              </p>
-              <p
-                style={{
-                  margin: "0 0 6px 0",
-                  fontSize: "14px",
-                  color: "#374151",
-                }}
-              >
-                <strong>Resource:</strong> {res.category.toUpperCase()}
-              </p>
-              <p
-                style={{
-                  margin: "0 0 12px 0",
-                  fontSize: "14px",
-                  color: "#3b82f6",
-                  fontWeight: "bold",
-                }}
-              >
-                📍{" "}
-                {match.distanceKm
-                  ? `${match.distanceKm} km away`
-                  : "Calculating route..."}
-              </p>
-            </div>
-          </div>
+            🚗{" "}
+            {match.distanceKm
+              ? `${match.distanceKm} km shortest driving route`
+              : "Calculating street route..."}
+          </p>
           <div className="match-tag">{match.status}</div>
 
           {match.status === "proposed" && (
-            <div className="flex-row" style={{ margin: "16px 0 0 0" }}>
+            <div className="flex-row" style={{ margin: "14px 0 0 0" }}>
               <button
                 onClick={() => onUpdateMatchStatus(match.id, "accepted")}
                 className="btn btn-green flex-1"
               >
-                Accept
+                Accept Route
               </button>
               <button
                 onClick={() => onUpdateMatchStatus(match.id, "cancelled")}
                 className="btn btn-red flex-1"
               >
-                Reject
+                Dismiss
               </button>
             </div>
           )}
@@ -389,7 +386,7 @@ const MatchDashboard = ({
   </div>
 );
 
-// --- MAIN APP ---
+// --- MAIN APPLICATION ---
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [mapItems, setMapItems] = useState([]);
@@ -400,6 +397,8 @@ export default function App() {
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isDashOpen, setIsDashOpen] = useState(false);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [alertForm, setAlertForm] = useState({ title: "", body: "" });
 
   const [formType, setFormType] = useState("request");
   const [formData, setFormData] = useState({
@@ -414,28 +413,30 @@ export default function App() {
   const getHeaders = () => ({ headers: { Authorization: `Bearer ${token}` } });
 
   const togglePanel = () => {
-    setIsPanelOpen(!isPanelOpen);
-    if (!isPanelOpen) setIsDashOpen(false);
+    setIsPanelOpen((prev) => {
+      if (!prev) setIsDashOpen(false);
+      return !prev;
+    });
   };
 
   const toggleDash = () => {
-    setIsDashOpen(!isDashOpen);
-    if (!isDashOpen) setIsPanelOpen(false);
+    setIsDashOpen((prev) => {
+      if (!prev) setIsPanelOpen(false);
+      return !prev;
+    });
   };
 
-  // NEW: Background Routing Engine to trace streets and calculate distance
+  // OSRM Street Routing Engine
   useEffect(() => {
     const fetchMissingRoutes = async () => {
-      // Find matches that don't have a route yet and aren't currently being fetched
       const matchesNeedingRoutes = liveMatches.filter(
         (m) => !m.routePath && !m.isFetchingRoute,
       );
       if (matchesNeedingRoutes.length === 0) return;
 
-      // Mark them as fetching to avoid duplicate API calls
       setLiveMatches((prev) =>
         prev.map((m) =>
-          matchesNeedingRoutes.find((needs) => needs.id === m.id)
+          matchesNeedingRoutes.some((n) => n.id === m.id)
             ? { ...m, isFetchingRoute: true }
             : m,
         ),
@@ -445,29 +446,20 @@ export default function App() {
         matchesNeedingRoutes.map(async (match) => {
           const req = mapItems.find((i) => i.id === match.requestId);
           const res = mapItems.find((i) => i.id === match.resourceId);
-
           if (!req || !res) return { ...match, isFetchingRoute: false };
 
           try {
-            // Fetch route from Open Source Routing Machine (OSRM)
-            // Note: OSRM takes coordinates as Longitude,Latitude
             const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${res.lng},${res.lat};${req.lng},${req.lat}?overview=full&geometries=geojson`;
             const response = await axios.get(osrmUrl);
-            const data = response.data.routes[0];
-
-            // GeoJSON returns [lng, lat], but Leaflet Polyline needs [lat, lng]
-            const routePath = data.geometry.coordinates.map((coord) => [
-              coord[1],
-              coord[0],
+            const route = response.data.routes[0];
+            const routePath = route.geometry.coordinates.map((c) => [
+              c[1],
+              c[0],
             ]);
-            const distanceKm = (data.distance / 1000).toFixed(2); // Convert meters to km
+            const distanceKm = (route.distance / 1000).toFixed(2);
 
             return { ...match, routePath, distanceKm, isFetchingRoute: false };
           } catch (err) {
-            console.error(
-              `OSRM Routing failed for match ${match.id}, falling back to straight line.`,
-            );
-            // Fallback to straight-line distance if API fails
             const distanceKm = getStraightLineDistance(
               req.lat,
               req.lng,
@@ -487,68 +479,89 @@ export default function App() {
         }),
       );
 
-      // Merge the new route data back into state
       setLiveMatches((prev) =>
-        prev.map((m) => {
-          const updated = updatedMatches.find((u) => u.id === m.id);
-          return updated ? updated : m;
-        }),
+        prev.map((m) => updatedMatches.find((u) => u.id === m.id) || m),
       );
     };
 
-    if (mapItems.length > 0) {
+    if (mapItems.length > 0 && liveMatches.length > 0) {
       fetchMissingRoutes();
     }
   }, [liveMatches, mapItems]);
 
+  // Initial Data Load & WebSockets
   useEffect(() => {
     if (!token) return;
 
     Promise.all([
       axios.get(
-        `${API_URL}/requests?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=15`,
+        `${API_URL}/requests?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=25`,
         getHeaders(),
       ),
       axios.get(
-        `${API_URL}/resources?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=15`,
+        `${API_URL}/resources?lat=${CENTER[0]}&lng=${CENTER[1]}&radiusKm=25`,
         getHeaders(),
       ),
-      axios.get(`${API_URL}/alerts`, getHeaders()),
+      axios
+        .get(`${API_URL}/alerts`, getHeaders())
+        .catch(() => ({ data: { alerts: [] } })),
     ])
       .then(([reqRes, resRes, alertRes]) => {
         setMapItems([
-          ...reqRes.data.requests.map((r) => ({ ...r, type: "request" })),
-          ...resRes.data.resources.map((r) => ({ ...r, type: "resource" })),
+          ...(reqRes.data.requests || []).map((r) => ({
+            ...r,
+            lat: Number(r.lat),
+            lng: Number(r.lng),
+            type: "request",
+          })),
+          ...(resRes.data.resources || []).map((r) => ({
+            ...r,
+            lat: Number(r.lat),
+            lng: Number(r.lng),
+            type: "resource",
+          })),
         ]);
-        setAlerts(alertRes.data.alerts);
+        setAlerts(alertRes.data.alerts || []);
       })
-      .catch((err) => console.error("Load failed:", err));
+      .catch((err) => console.error("Initial load error:", err));
 
     socket.on("request:new", (data) =>
-      setMapItems((p) => [...p, { ...data, type: "request" }]),
+      setMapItems((p) => [
+        ...p,
+        {
+          ...data,
+          lat: Number(data.lat),
+          lng: Number(data.lng),
+          type: "request",
+        },
+      ]),
     );
     socket.on("resource:new", (data) =>
-      setMapItems((p) => [...p, { ...data, type: "resource" }]),
+      setMapItems((p) => [
+        ...p,
+        {
+          ...data,
+          lat: Number(data.lat),
+          lng: Number(data.lng),
+          type: "resource",
+        },
+      ]),
     );
-
     socket.on("match:new", (matches) => {
       setLiveMatches((p) => [...p, ...matches]);
       setToast(`⚡ Auto-Match: Paired ${matches.length} nearby locations!`);
       setTimeout(() => setToast(null), 6000);
     });
-
     socket.on("item:resolved", (id) => {
       setMapItems((prev) => prev.filter((item) => item.id !== id));
       setLiveMatches((prev) =>
         prev.filter((m) => m.requestId !== id && m.resourceId !== id),
       );
     });
-
     socket.on("match:updated", (updatedMatch) => {
       if (updatedMatch.status === "cancelled") {
         setLiveMatches((prev) => prev.filter((m) => m.id !== updatedMatch.id));
       } else {
-        // Maintain the existing route data when status changes to avoid recalculating
         setLiveMatches((prev) =>
           prev.map((m) =>
             m.id === updatedMatch.id
@@ -562,7 +575,6 @@ export default function App() {
         );
       }
     });
-
     socket.on("alert:new", (newAlert) =>
       setAlerts((prev) => [newAlert, ...prev]),
     );
@@ -587,12 +599,18 @@ export default function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.lat || !formData.lng)
-      return alert("Please tap the map to set a location.");
+    if (!formData.lat || !formData.lng) {
+      return alert("Please tap on the map to set a location first.");
+    }
 
     setIsSubmitting(true);
     try {
-      await axios.post(`${API_URL}/${formType}s`, formData, getHeaders());
+      const payload = {
+        ...formData,
+        lat: parseFloat(formData.lat),
+        lng: parseFloat(formData.lng),
+      };
+      await axios.post(`${API_URL}/${formType}s`, payload, getHeaders());
       setFormData({
         category: "medical",
         description: "",
@@ -602,10 +620,9 @@ export default function App() {
         lng: "",
       });
       setIsPanelOpen(false);
-      setToast("✅ Broadcast successful!");
-      setTimeout(() => setToast(null), 3000);
+      setToast("✅ Broadcast live on map!");
+      setTimeout(() => setToast(null), 3500);
     } catch (error) {
-      // NOW WE CAN SEE THE ACTUAL ERROR
       const errorMsg =
         error.response?.data?.error || error.message || "Failed to broadcast.";
       alert(`Error: ${errorMsg}`);
@@ -629,10 +646,12 @@ export default function App() {
         { status: targetStatus },
         getHeaders(),
       );
+      setToast("✓ Item marked as resolved");
+      setTimeout(() => setToast(null), 3000);
     } catch (error) {
       setMapItems(previousMapItems);
       setLiveMatches(previousMatches);
-      alert("Status update failed! Reverting view.");
+      alert("Database status update failed.");
     }
   };
 
@@ -648,15 +667,29 @@ export default function App() {
     }
   };
 
+  const handleCreateAlert = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API_URL}/alerts`, alertForm, getHeaders());
+      setAlertForm({ title: "", body: "" });
+      setIsAlertModalOpen(false);
+    } catch (error) {
+      alert(
+        error.response?.data?.error || "Failed to broadcast emergency alert.",
+      );
+    }
+  };
+
   if (!token) return <AuthScreen onLogin={setToken} />;
 
   return (
-    <div className="app-wrapper">
-      {/* Alert Banner */}
+    <div
+      className={`app-wrapper ${isPanelOpen || isDashOpen ? "panel-active" : ""}`}
+    >
       {alerts.length > 0 && (
         <div className="alert-banner">
           <span>
-            ⚠️ {alerts[0].title}: {alerts[0].body}
+            ⚠️ <strong>{alerts[0].title}:</strong> {alerts[0].body}
           </span>
           <button
             className="btn-close-alert"
@@ -667,21 +700,75 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
       <header className="navbar">
-        <h2>📍 RescueBridge</h2>
-        <button onClick={handleLogout} className="btn-logout-nav">
-          Logout
-        </button>
+        <h2 className="navbar-brand">📍 RescueBridge</h2>
+        <div className="navbar-actions">
+          <button
+            onClick={() => setIsAlertModalOpen(true)}
+            className="btn-nav btn-nav-alert"
+          >
+            📢 Broadcast Alert
+          </button>
+          <button onClick={handleLogout} className="btn-nav btn-nav-logout">
+            Logout
+          </button>
+        </div>
       </header>
 
-      {/* Main UI Container */}
+      {isAlertModalOpen && (
+        <div className="modal-overlay">
+          <div className="auth-card">
+            <div className="panel-header">
+              <h3>📢 Emergency Broadcast</h3>
+              <button
+                type="button"
+                className="btn-icon-close"
+                onClick={() => setIsAlertModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleCreateAlert} className="form-group">
+              <label>
+                Alert Headline
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Flash Flood Warning - Sector 4"
+                  value={alertForm.title}
+                  onChange={(e) =>
+                    setAlertForm({ ...alertForm, title: e.target.value })
+                  }
+                  className="form-input"
+                />
+              </label>
+              <label>
+                Instructions
+                <textarea
+                  required
+                  rows="3"
+                  placeholder="Evacuate low-lying areas immediately..."
+                  value={alertForm.body}
+                  onChange={(e) =>
+                    setAlertForm({ ...alertForm, body: e.target.value })
+                  }
+                  className="form-input"
+                />
+              </label>
+              <button type="submit" className="btn btn-red">
+                Transmit Global Alert
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="main-content">
         {toast && <div className="toast">{toast}</div>}
 
         <button
           onClick={togglePanel}
-          className="toggle-btn"
+          className="toggle-btn btn-left-tab"
           style={{
             left: "0",
             borderRadius: "0 8px 8px 0",
@@ -693,7 +780,7 @@ export default function App() {
 
         <button
           onClick={toggleDash}
-          className="toggle-btn"
+          className="toggle-btn btn-right-tab"
           style={{
             right: "0",
             borderRadius: "8px 0 0 8px",
@@ -708,7 +795,6 @@ export default function App() {
                 padding: "2px 8px",
                 borderRadius: "12px",
                 fontSize: "12px",
-                marginLeft: "8px",
               }}
             >
               {liveMatches.length}
@@ -762,34 +848,40 @@ export default function App() {
                     : ICONS[item.urgency] || ICONS.high
                 }
               >
-                <Popup className="custom-popup">
-                  <div style={{ padding: "4px" }}>
-                    <h3
+                <Popup>
+                  <div style={{ minWidth: "180px", padding: "2px" }}>
+                    <div
                       style={{
-                        margin: "0 0 8px 0",
-                        fontSize: "15px",
-                        color: "#111827",
                         display: "flex",
                         justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "6px",
                       }}
                     >
-                      {item.category.toUpperCase()}
+                      <strong style={{ fontSize: "14px", color: "#0f172a" }}>
+                        {item.category.toUpperCase()}
+                      </strong>
                       <span
                         style={{
-                          fontSize: "12px",
-                          fontWeight: "normal",
-                          color: "#6b7280",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          background:
+                            item.type === "request" ? "#fee2e2" : "#d1fae5",
+                          color:
+                            item.type === "request" ? "#b91c1c" : "#047857",
                         }}
                       >
-                        {item.type === "request" ? "Need" : "Supply"}
+                        {item.type === "request" ? "NEED" : "SUPPLY"}
                       </span>
-                    </h3>
+                    </div>
 
                     <p
                       style={{
-                        margin: "0 0 12px 0",
-                        color: "#4b5563",
+                        margin: "0 0 10px 0",
                         fontSize: "13px",
+                        color: "#334155",
                       }}
                     >
                       {item.description}
@@ -798,28 +890,28 @@ export default function App() {
                     <div
                       style={{
                         display: "flex",
-                        gap: "10px",
-                        marginBottom: "12px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
+                        gap: "6px",
+                        marginBottom: "10px",
+                        fontSize: "11px",
+                        fontWeight: 600,
                       }}
                     >
                       {item.type === "request" && (
                         <span
                           style={{
-                            color: "#ef4444",
+                            color: "#dc2626",
                             background: "#fef2f2",
                             padding: "2px 6px",
                             borderRadius: "4px",
                           }}
                         >
-                          {item.urgency} priority
+                          {item.urgency}
                         </span>
                       )}
                       <span
                         style={{
-                          color: "#10b981",
-                          background: "#ecfdf5",
+                          color: "#4f46e5",
+                          background: "#e0e7ff",
                           padding: "2px 6px",
                           borderRadius: "4px",
                         }}
@@ -828,15 +920,17 @@ export default function App() {
                       </span>
                     </div>
 
-                    {item.id && (
-                      <button
-                        onClick={() => handleResolve(item.id, item.type)}
-                        className="btn btn-gray"
-                        style={{ width: "100%", padding: "8px" }}
-                      >
-                        ✓ Mark Resolved
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleResolve(item.id, item.type)}
+                      className="btn btn-gray"
+                      style={{
+                        padding: "8px",
+                        marginTop: "4px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      ✓ Mark Resolved
+                    </button>
                   </div>
                 </Popup>
               </Marker>
@@ -847,7 +941,6 @@ export default function App() {
               const res = mapItems.find((i) => i.id === match.resourceId);
               if (!req || !res) return null;
 
-              // Use the fetched street route if available, otherwise fallback to straight line
               const pathPositions = match.routePath || [
                 [req.lat, req.lng],
                 [res.lat, res.lng],
@@ -857,17 +950,17 @@ export default function App() {
                 <Polyline
                   key={match.id}
                   positions={pathPositions}
-                  color={match.status === "accepted" ? "#10b981" : "#3b82f6"}
+                  color={match.status === "accepted" ? "#10b981" : "#4f46e5"}
                   weight={5}
-                  opacity={0.8}
-                  dashArray={match.status === "accepted" ? "" : "10, 12"}
+                  opacity={0.85}
+                  dashArray={match.status === "accepted" ? "" : "8, 10"}
                 />
               );
             })}
 
             {formData.lat && formData.lng && (
               <Marker position={[formData.lat, formData.lng]} opacity={0.7}>
-                <Popup>Selected Location</Popup>
+                <Popup>Target Dispatch Location</Popup>
               </Marker>
             )}
           </MapContainer>
