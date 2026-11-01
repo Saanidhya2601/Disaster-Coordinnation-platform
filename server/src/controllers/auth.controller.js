@@ -1,91 +1,57 @@
+const { PrismaClient } = require("@prisma/client");
 const jwt = require("jsonwebtoken");
-const prisma = require("../lib/prisma");
+const prisma = new PrismaClient();
 
-// Temporary in-memory OTP store for development
 const otpStore = new Map();
 
 const sendOtp = async (req, res) => {
   const { phone } = req.body;
-
   if (!phone || typeof phone !== "string") {
     return res.status(400).json({ error: "Valid phone number is required" });
   }
 
+  // Fallback to 123456 unless SMS provider is configured in production
   const otp =
-    process.env.NODE_ENV === "development"
-      ? "123456"
-      : Math.floor(100000 + Math.random() * 900000).toString();
-
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+    process.env.SMS_ENABLED === "true"
+      ? Math.floor(100000 + Math.random() * 900000).toString()
+      : "123456";
+  const expiresAt = Date.now() + 5 * 60 * 1000;
 
   otpStore.set(phone, { otp, expiresAt });
   console.log(`[AUTH] OTP for ${phone}: ${otp}`);
 
-  return res.status(200).json({
-    message: "OTP dispatched successfully",
-    devOtp: process.env.NODE_ENV === "development" ? otp : undefined,
-  });
+  return res.status(200).json({ message: "OTP sent", devOtp: otp });
 };
 
 const verifyOtp = async (req, res) => {
   const { phone, otp, name } = req.body;
-
-  if (!phone || !otp) {
-    return res.status(400).json({ error: "Phone and OTP are required" });
-  }
-
   const record = otpStore.get(phone);
 
-  if (!record || record.otp !== otp) {
-    return res.status(400).json({ error: "Invalid OTP" });
-  }
-
-  if (Date.now() > record.expiresAt) {
-    otpStore.delete(phone);
-    return res.status(400).json({ error: "OTP has expired" });
+  if (!record || record.otp !== otp || Date.now() > record.expiresAt) {
+    return res.status(400).json({ error: "Invalid or expired OTP" });
   }
 
   otpStore.delete(phone);
 
-  let user = await prisma.user.findUnique({ where: { phone } });
+  try {
+    let user = await prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: { phone, name: name || "Responder", role: "volunteer" },
+      });
+    }
 
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        phone,
-        name: name || `Citizen-${phone.slice(-4)}`,
-        verified: true,
-      },
-    });
-  } else {
-    user = await prisma.user.update({
-      where: { phone },
-      data: { verified: true, lastActiveAt: new Date() },
-    });
+    const token = jwt.sign(
+      { id: user.id, phone: user.phone, role: user.role, name: user.name },
+      process.env.JWT_SECRET || "rescuebridge_super_secret_key",
+      { expiresIn: "7d" },
+    );
+
+    return res.status(200).json({ token, user });
+  } catch (error) {
+    console.error("[AUTH VERIFY ERROR]", error);
+    return res.status(500).json({ error: "Authentication failed" });
   }
-
-  // Added fallback for JWT_SECRET to prevent dev crashes
-  const token = jwt.sign(
-    { userId: user.id, role: user.role },
-    process.env.JWT_SECRET || "fallback_dev_secret_key",
-    { expiresIn: "7d" },
-  );
-
-  return res.status(200).json({
-    message: "Authentication successful",
-    token,
-    user: {
-      id: user.id,
-      name: user.name,
-      phone: user.phone,
-      role: user.role,
-      verified: user.verified,
-    },
-  });
 };
 
-const getMe = async (req, res) => {
-  return res.status(200).json({ user: req.user });
-};
-
-module.exports = { sendOtp, verifyOtp, getMe };
+module.exports = { sendOtp, verifyOtp };
