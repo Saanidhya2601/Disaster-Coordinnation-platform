@@ -1,12 +1,9 @@
-// server/src/controllers/request.controller.js
-const { Prisma } = require("@prisma/client");
-const prisma = require("../lib/prisma");
-const { findNearbyRequests } = require("../services/geo.service");
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
 const {
   findAndCreateMatchesForRequest,
 } = require("../services/matching.service");
 
-// server/src/controllers/request.controller.js
 const createRequest = async (req, res) => {
   const { category, description, urgency, lat, lng } = req.body;
   const userId = req.user.id;
@@ -15,74 +12,100 @@ const createRequest = async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
+  const parsedLat = parseFloat(lat);
+  const parsedLng = parseFloat(lng);
+
   try {
     const result = await prisma.$queryRaw`
       INSERT INTO "requests" (
         "id", "createdById", "category", "description", "urgency", 
         "location", "status", "updatedAt"
       ) VALUES (
-        gen_random_uuid(), ${userId}, ${category}::"Category", ${description}, 
-        ${urgency}::"Urgency", 
-        ST_MakePoint(${parseFloat(lng)}::double precision, ${parseFloat(lat)}::double precision)::geography, 
-        'YOUR_EXACT_SCHEMA_WORD_HERE'::"RequestStatus", NOW() 
-      )
+        gen_random_uuid(), 
+        ${userId}, 
+        ${category}::"Category", 
+        ${description}, 
+        ${urgency || "high"}::"Urgency", 
+        ST_MakePoint(${parsedLng}::double precision, ${parsedLat}::double precision)::geography, 
+        'open'::"RequestStatus", 
+        NOW()
+      ) 
       RETURNING id, category, description, urgency, status;
     `;
 
-    const newRequest = result[0];
+    const newRequest = { ...result[0], lat: parsedLat, lng: parsedLng };
     const matches = await findAndCreateMatchesForRequest(newRequest.id);
     const io = req.app.get("io");
 
-    io.emit("request:new", { ...newRequest, lat, lng });
-    if (matches.length > 0) io.emit("match:new", matches);
+    io.emit("request:new", newRequest);
+    if (matches && matches.length > 0) {
+      io.emit("match:new", matches);
+    }
 
-    return res
-      .status(201)
-      .json({ message: "Request broadcasted", request: newRequest });
+    return res.status(201).json({
+      message: "Request broadcasted successfully",
+      request: newRequest,
+      matchesFound: matches ? matches.length : 0,
+    });
   } catch (error) {
-    console.error("[REQUEST ERROR]", error);
-    // Send the actual error message to the frontend so we don't have to guess next time
+    console.error("[REQUEST CREATE ERROR]", error);
     return res
       .status(500)
-      .json({ error: error.message || "Database insertion failed." });
+      .json({ error: error.message || "Failed to broadcast request" });
   }
 };
-const getNearbyRequests = async (req, res) => {
-  const { lat, lng, radiusKm = 10, category } = req.query;
 
-  if (!lat || !lng) {
-    return res
-      .status(400)
-      .json({ error: "Latitude and longitude are required" });
-  }
+const getNearbyRequests = async (req, res) => {
+  const { lat = 18.5204, lng = 73.8567, radiusKm = 15 } = req.query;
+  const parsedLat = parseFloat(lat);
+  const parsedLng = parseFloat(lng);
+  const radiusMeters = parseFloat(radiusKm) * 1000;
 
   try {
-    const requests = await findNearbyRequests(
-      parseFloat(lat),
-      parseFloat(lng),
-      parseFloat(radiusKm),
-      category,
-    );
+    const requests = await prisma.$queryRaw`
+      SELECT 
+        id, category, description, urgency, status, "createdAt",
+        ST_Y(location::geometry) AS lat,
+        ST_X(location::geometry) AS lng
+      FROM "requests"
+      WHERE status IN ('open'::"RequestStatus", 'matched'::"RequestStatus")
+        AND ST_DWithin(
+          location, 
+          ST_MakePoint(${parsedLng}::double precision, ${parsedLat}::double precision)::geography, 
+          ${radiusMeters}::double precision
+        )
+      ORDER BY "createdAt" DESC;
+    `;
+
     return res.status(200).json({ requests });
   } catch (error) {
-    console.error("[GEO ERROR]", error);
+    console.error("[GET REQUESTS ERROR]", error);
     return res.status(500).json({ error: "Failed to fetch nearby requests" });
   }
 };
 
 const updateRequestStatus = async (req, res) => {
-  try {
-    const updated = await prisma.request.update({
-      where: { id: req.params.id },
-      data: { status: req.body.status },
-    });
+  const { id } = req.params;
+  const { status } = req.body; // 'open' | 'matched' | 'fulfilled' | 'cancelled'
 
-    // Emit global removal event to ALL windows
-    req.app.get("io").emit("item:resolved", req.params.id);
-    res.json(updated);
+  try {
+    await prisma.$executeRaw`
+      UPDATE "requests"
+      SET status = ${status}::"RequestStatus", "updatedAt" = NOW()
+      WHERE id = ${id};
+    `;
+
+    if (status === "fulfilled" || status === "cancelled") {
+      const io = req.app.get("io");
+      io.emit("item:resolved", id);
+    }
+
+    return res
+      .status(200)
+      .json({ message: "Request status updated", id, status });
   } catch (error) {
-    console.error("[UPDATE ERROR]", error);
-    res.status(500).json({ error: "Failed to update request" });
+    console.error("[UPDATE REQUEST ERROR]", error);
+    return res.status(500).json({ error: "Failed to update request status" });
   }
 };
 
